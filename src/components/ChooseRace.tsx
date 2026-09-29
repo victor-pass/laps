@@ -68,11 +68,17 @@ export const ChooseRace: Component = () => {
     <div class="choose-race">
       <Show when={!creating()} fallback={<CreateRace {...createProps} />}>
         <Suspense fallback={<select disabled />}>
-          <select value={selected()?.id ?? ""} onChange={onSelectChange}>
-            <option value="">Select a race</option>
+          <select onChange={onSelectChange}>
+            <option value="" selected={!selected()}>
+              Select a race
+            </option>
             <optgroup label="Your races">
               <For each={races()}>
-                {(race) => <option value={race.id}>{race.name}</option>}
+                {(race) => (
+                  <option value={race.id} selected={race.id === selected()?.id}>
+                    {race.name}
+                  </option>
+                )}
               </For>
             </optgroup>
             <optgroup label="Actions">
