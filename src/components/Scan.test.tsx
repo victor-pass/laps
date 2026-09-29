@@ -1,5 +1,5 @@
 import { expect, describe, it, vi } from "vitest";
-import { render, waitFor } from "@solidjs/testing-library";
+import { render } from "@solidjs/testing-library";
 import { Scan } from "./Scan";
 import { TestContext } from "@/test/TestContext";
 import { createOfflineEngine, emptyState } from "@/offline";
@@ -96,7 +96,7 @@ describe("Scan", () => {
     expect(popup.message()).toStrictEqual("Lap 1");
   });
 
-  it("counts a repeat scan of the same runner against the local total", async () => {
+  it("ignores a repeat scan of the same QR code within the dedupe window", async () => {
     const { scanner, decode } = fakeScanner();
     const $post = mockJSONRequest(null);
     const offline = createOfflineEngine({
@@ -104,25 +104,26 @@ describe("Scan", () => {
       selectedRace: testRace(),
     });
 
-    const rendered = render(() => (
-      <TestContext
-        scanner={scanner}
-        offline={offline}
-        api={{ runners: { scan: { $post } } }}
-      >
-        <Scan />
-      </TestContext>
-    ));
-    const views = loadViews(rendered);
+    const views = loadViews(
+      render(() => (
+        <TestContext
+          scanner={scanner}
+          offline={offline}
+          api={{ runners: { scan: { $post } } }}
+        >
+          <Scan />
+        </TestContext>
+      )),
+    );
 
     decode("Bib 42");
     await views.popup();
     decode("Bib 42");
-    await waitFor(() =>
-      expect(rendered.container.querySelector(".popup")?.textContent).toBe(
-        "Lap 2 - Bib 42",
-      ),
-    );
+
+    // Nothing should happen for the second decode - give it a moment to
+    // (not) show up before asserting the negative.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect($post).toHaveBeenCalledTimes(1);
   });
 
   it("shows an error when no race is selected", async () => {
@@ -148,12 +149,18 @@ describe("Scan", () => {
       testRace({ id: uuid(1), name: "Trail Run" }),
     );
     const join$post = mockJSONRequest(null);
+    const select$put = mockJSONRequest(null);
 
     const views = loadViews(
       render(() => (
         <TestContext
           scanner={scanner}
-          api={{ races: { ":id": { $get: preview$get, join: { $post: join$post } } } }}
+          api={{
+            races: {
+              ":id": { $get: preview$get, join: { $post: join$post } },
+              selected: { $put: select$put },
+            },
+          }}
         >
           <Scan />
         </TestContext>
@@ -175,7 +182,11 @@ describe("Scan", () => {
     const popup = await views.popup();
     expect(join$post).toHaveBeenCalledExactlyOnceWith({
       param: { id: uuid(1) },
-      json: { updateDefault: true },
+    });
+    // Joining grants membership; selecting it as this device's current
+    // race is the separate, coalesced sync.
+    expect(select$put).toHaveBeenCalledExactlyOnceWith({
+      json: { id: uuid(1) },
     });
     expect(popup.message()).toStrictEqual("Joined Trail Run");
     expect(start).toHaveBeenCalledTimes(2);

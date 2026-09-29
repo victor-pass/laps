@@ -214,8 +214,24 @@ main > *:not(.scan):not(.popup) {
     color: var(--e);
 }
 
-.laps {
+.lap-counts ul {
     list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.lap-filter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+}
+
+.lap-filter input {
+    width: 3.5em;
 }
 
 .devices {

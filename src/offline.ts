@@ -1,5 +1,6 @@
 import type { ApiClient, LapData, RaceData, RunnerData, ScanResult } from "@/api";
 import { runnerRef } from "@/runner";
+import { collapseLaps, DEFAULT_LAP_FILTER_SECONDS } from "@/lapDedupe";
 
 const STORAGE_KEY = "laps:offline";
 
@@ -14,9 +15,11 @@ export interface LocalState {
   lapsByRace: Record<string, LocalLap[]>;
 }
 
+// Events: each one is a distinct thing that happened and must be replayed
+// exactly, in order, with nothing dropped or merged.
 type PendingAction =
-  | { kind: "createRace"; id: string; name: string; updateDefault: boolean }
-  | { kind: "joinRace"; id: string; updateDefault: boolean }
+  | { kind: "createRace"; id: string; name: string }
+  | { kind: "joinRace"; id: string }
   | {
       kind: "scan";
       race: string;
@@ -25,9 +28,20 @@ type PendingAction =
       timestamp: string;
     };
 
+interface PendingLapFilter {
+  race: string;
+  seconds: number;
+}
+
 interface Persisted {
   state: LocalState;
   queue: PendingAction[];
+  // Coalesced state, not events: only the latest value matters, so editing
+  // either of these five times locally still sends at most one request per
+  // sync, not five. Synced after `queue` drains, since either can
+  // reference a race that only just got created/joined offline.
+  pendingSelect?: string;
+  pendingLapFilter?: PendingLapFilter;
 }
 
 class NetworkError extends Error {}
@@ -68,6 +82,8 @@ export interface OfflineEngine {
   previewRace(api: ApiClient, id: string): Promise<RaceData>;
   joinRace(api: ApiClient, race: RaceData): void;
   createRace(api: ApiClient, name: string): RaceData;
+  selectRace(api: ApiClient, race: RaceData): void;
+  setLapFilter(api: ApiClient, race: RaceData, seconds: number): void;
   scan(api: ApiClient, data: string): Promise<ScanResult>;
   drain(api: ApiClient): Promise<void>;
   resync(api: ApiClient): Promise<void>;
@@ -79,11 +95,11 @@ export interface OfflineEngine {
 export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   const store: Persisted = seed ? { state: seed, queue: [] } : load();
   const persistToStorage = !seed;
-  // A join/create counts as the device's "startup" selection only once per
-  // page load - the first one after a fresh load or a genuinely new device
-  // is allowed to update the server's default race for the next fresh
-  // start; anything after that is a switch made on an already-running app
-  // and must not change what other sessions bootstrap into.
+  // A selection counts as the device's "startup" choice only once per page
+  // load - the first one after a fresh load or a genuinely new device is
+  // allowed to update the server's default race for the next fresh start;
+  // anything after that is a switch made on an already-running app and
+  // must not change what other sessions bootstrap into.
   let usedStartupSlot = false;
   let draining = false;
 
@@ -91,44 +107,54 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     if (persistToStorage) save(store);
   };
 
-  function nextUpdateDefault(): boolean {
+  function isStartupSelection(): boolean {
     if (usedStartupSlot) return false;
     usedStartupSlot = true;
     return true;
   }
 
-  function rememberRace(race: RaceData) {
+  // Shared by createRace/joinRace/selectRace: always applies locally so
+  // this device renders the new race immediately; only arms the coalesced
+  // server sync when this is the session's startup selection.
+  function applySelection(race: RaceData) {
     if (!store.state.races.some((r) => r.id === race.id)) {
       store.state.races.push(race);
     }
     store.state.selectedRace = race;
+    if (isStartupSelection()) store.pendingSelect = race.id;
   }
 
-  function lapCountFor(race: string, runner: string): number {
-    return (store.state.lapsByRace[race] ?? []).filter(
+  function countForRunner(
+    raceId: string,
+    runner: string,
+    thresholdSeconds: number,
+  ): number {
+    const laps = (store.state.lapsByRace[raceId] ?? []).filter(
       (l) => l.runner === runner,
-    ).length;
+    );
+    return collapseLaps(laps, thresholdSeconds).length;
   }
 
   function recordLocalLap(race: string, runner: string, timestamp: string) {
     (store.state.lapsByRace[race] ??= []).push({ runner, timestamp });
   }
 
+  function hasPendingWork(): boolean {
+    return (
+      store.queue.length > 0 ||
+      store.pendingSelect !== undefined ||
+      store.pendingLapFilter !== undefined
+    );
+  }
+
   function request(api: ApiClient, action: PendingAction) {
     switch (action.kind) {
       case "createRace":
         return api.races.$post({
-          json: {
-            id: action.id,
-            name: action.name,
-            updateDefault: action.updateDefault,
-          },
+          json: { id: action.id, name: action.name },
         });
       case "joinRace":
-        return api.races[":id"].join.$post({
-          param: { id: action.id },
-          json: { updateDefault: action.updateDefault },
-        });
+        return api.races[":id"].join.$post({ param: { id: action.id } });
       case "scan":
         return api.runners.scan.$post({
           json: {
@@ -140,10 +166,12 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     }
   }
 
-  async function sendOne(api: ApiClient, action: PendingAction) {
+  async function requestOk(
+    response: Promise<{ ok: boolean; status: number }>,
+  ) {
     let ok: boolean, status: number;
     try {
-      const res = await request(api, action);
+      const res = await response;
       ok = res.ok;
       status = res.status;
     } catch {
@@ -153,30 +181,80 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     if (status >= 500) throw new NetworkError();
     // A 4xx here means the request reached the server and was rejected
     // (e.g. malformed data) - it can never succeed by retrying, so drop it
-    // rather than blocking every action queued behind it forever.
+    // rather than blocking everything queued behind it forever.
+  }
+
+  async function drainQueue(api: ApiClient) {
+    while (store.queue.length > 0) {
+      try {
+        await requestOk(request(api, store.queue[0]));
+      } catch (e) {
+        if (e instanceof NetworkError) return false;
+        throw e;
+      }
+      store.queue.shift();
+      persist();
+    }
+    return true;
+  }
+
+  async function drainSelect(api: ApiClient) {
+    const id = store.pendingSelect;
+    if (id === undefined) return true;
+    try {
+      await requestOk(
+        api.races.selected.$put({ json: { id } }),
+      );
+    } catch (e) {
+      if (e instanceof NetworkError) return false;
+      throw e;
+    }
+    // Only clear if nothing newer arrived while this was in flight.
+    if (store.pendingSelect === id) store.pendingSelect = undefined;
+    persist();
+    return true;
+  }
+
+  async function drainLapFilter(api: ApiClient) {
+    const pending = store.pendingLapFilter;
+    if (pending === undefined) return true;
+    try {
+      await requestOk(
+        api.races[":id"].$patch({
+          param: { id: pending.race },
+          json: { lapFilterSeconds: pending.seconds },
+        }),
+      );
+    } catch (e) {
+      if (e instanceof NetworkError) return false;
+      throw e;
+    }
+    if (
+      store.pendingLapFilter?.race === pending.race &&
+      store.pendingLapFilter.seconds === pending.seconds
+    ) {
+      store.pendingLapFilter = undefined;
+    }
+    persist();
+    return true;
   }
 
   async function drain(api: ApiClient) {
     if (draining) return;
     draining = true;
     try {
-      while (store.queue.length > 0) {
-        try {
-          await sendOne(api, store.queue[0]);
-        } catch (e) {
-          if (e instanceof NetworkError) return;
-          throw e;
-        }
-        store.queue.shift();
-        persist();
-      }
+      // Events first, in order - a coalesced select/lap-filter might
+      // reference a race that only just got created/joined offline.
+      if (!(await drainQueue(api))) return;
+      if (!(await drainSelect(api))) return;
+      await drainLapFilter(api);
     } finally {
       draining = false;
     }
   }
 
   async function resync(api: ApiClient) {
-    if (store.queue.length > 0) return; // don't clobber unsynced local state
+    if (hasPendingWork()) return; // don't clobber unsynced local state
     try {
       const [racesRes, selectedRes] = await Promise.all([
         api.races.$get(),
@@ -208,7 +286,10 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
 
   return {
     state: () => store.state,
-    pendingCount: () => store.queue.length,
+    pendingCount: () =>
+      store.queue.length +
+      (store.pendingSelect !== undefined ? 1 : 0) +
+      (store.pendingLapFilter !== undefined ? 1 : 0),
 
     async previewRace(api, id) {
       try {
@@ -223,26 +304,42 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     },
 
     joinRace(api, race) {
-      const updateDefault = nextUpdateDefault();
-      rememberRace(race);
-      store.queue.push({ kind: "joinRace", id: race.id, updateDefault });
+      applySelection(race);
+      store.queue.push({ kind: "joinRace", id: race.id });
       persist();
       void drain(api);
     },
 
     createRace(api, name) {
-      const updateDefault = nextUpdateDefault();
-      const race: RaceData = { id: crypto.randomUUID(), name };
-      rememberRace(race);
-      store.queue.push({
-        kind: "createRace",
-        id: race.id,
+      const race: RaceData = {
+        id: crypto.randomUUID(),
         name,
-        updateDefault,
-      });
+        lapFilterSeconds: DEFAULT_LAP_FILTER_SECONDS,
+      };
+      applySelection(race);
+      store.queue.push({ kind: "createRace", id: race.id, name });
       persist();
       void drain(api);
       return race;
+    },
+
+    // For picking a race the device already belongs to (e.g. from the
+    // dropdown) - unlike joinRace, this never re-sends membership.
+    selectRace(api, race) {
+      applySelection(race);
+      persist();
+      void drain(api);
+    },
+
+    setLapFilter(api, race, seconds) {
+      if (store.state.selectedRace?.id === race.id) {
+        store.state.selectedRace = { ...store.state.selectedRace, lapFilterSeconds: seconds };
+      }
+      const known = store.state.races.find((r) => r.id === race.id);
+      if (known) known.lapFilterSeconds = seconds;
+      store.pendingLapFilter = { race: race.id, seconds };
+      persist();
+      void drain(api);
     },
 
     async scan(api, data) {
@@ -251,8 +348,11 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
 
       const ref = await runnerRef(data);
       const timestamp = new Date().toISOString();
-      const lapCount = lapCountFor(race.id, ref) + 1;
       recordLocalLap(race.id, ref, timestamp);
+      // Recomputed (not incremented) after recording, so a scan that lands
+      // within the race's own filter window of the runner's last counted
+      // lap correctly doesn't bump the shown count.
+      const lapCount = countForRunner(race.id, ref, race.lapFilterSeconds);
       store.queue.push({
         kind: "scan",
         race: race.id,
@@ -283,15 +383,21 @@ export const noopOfflineEngine: OfflineEngine = {
   pendingCount: () => 0,
   previewRace: () => Promise.reject(new Error("unavailable during render")),
   joinRace: () => {},
-  createRace: (_api, name) => ({ id: crypto.randomUUID(), name }),
+  createRace: (_api, name) => ({
+    id: crypto.randomUUID(),
+    name,
+    lapFilterSeconds: DEFAULT_LAP_FILTER_SECONDS,
+  }),
+  selectRace: () => {},
+  setLapFilter: () => {},
   scan: () => Promise.reject(new Error("unavailable during render")),
   drain: () => Promise.resolve(),
   resync: () => Promise.resolve(),
 };
 
 // Flushes anything queued from a previous session, hydrates local state
-// from the server once the queue is confirmed empty, and keeps doing both
-// whenever the browser regains connectivity.
+// from the server once everything is confirmed synced, and keeps doing
+// both whenever the browser regains connectivity.
 export async function initSync(
   engine: OfflineEngine,
   api: ApiClient,

@@ -2,13 +2,13 @@ import { ChooseRaceView } from "./ChooseRaceView";
 import { ConfirmRaceView } from "./ConfirmRaceView";
 import { CreateRaceView } from "./CreateRaceView";
 import { DevicesView } from "./DevicesView";
-import { LapsView } from "./LapsView";
+import { LapCountsView } from "./LapCountsView";
 import { PopupView } from "./PopupView";
 import { SelectedRaceQRView } from "./SelectedRaceQRView";
 import { viewAccessor } from "./View";
 
 export const loadViews = ({ container }: { container: HTMLElement }) => ({
-  laps: viewAccessor(container, LapsView),
+  lapCounts: viewAccessor(container, LapCountsView),
   devices: viewAccessor(container, DevicesView),
   popup: viewAccessor(container, PopupView),
   selectedRaceQr: viewAccessor(container, SelectedRaceQRView),

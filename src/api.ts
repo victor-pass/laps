@@ -53,6 +53,7 @@ export interface LapData extends Omit<Lap, "timestamp"> {
 export interface RaceData {
   id: string;
   name: string;
+  lapFilterSeconds: number;
 }
 
 export type RunnerData = typeof runner.$inferSelect;
@@ -122,7 +123,11 @@ export const createAPI = (loadDB: LoadDB) =>
     })
     .get("/races", async (c) => {
       const rows = await db(c)
-        .select({ id: race.id, name: race.name })
+        .select({
+          id: race.id,
+          name: race.name,
+          lapFilterSeconds: race.lapFilterSeconds,
+        })
         .from(userRace)
         .innerJoin(race, eq(race.id, userRace.race))
         .where(eq(userRace.user, authUser(c).sub));
@@ -130,82 +135,142 @@ export const createAPI = (loadDB: LoadDB) =>
     })
     .post(
       "/races",
-      jsonBody<{ name: string; id?: string; updateDefault?: boolean }>(),
+      jsonBody<{ name: string; id?: string }>(),
       async (c) => {
-        const { name, id: clientId, updateDefault } = c.req.valid("json");
+        const { name, id: clientId } = c.req.valid("json");
         if (!name?.trim())
           throw new HTTPException(400, { message: "name is required" });
 
         // A client generates its own id so it can create races while
         // offline; onConflictDoNothing makes resending the same create
-        // (e.g. a synced retry) a no-op instead of an error.
+        // (e.g. a synced retry) a no-op instead of an error. Creating
+        // grants membership but never touches the user's selected race -
+        // that's a distinct, coalesced choice made through
+        // PUT /races/selected.
         const id = clientId ?? crypto.randomUUID();
         await db(c).insert(race).values({ id, name }).onConflictDoNothing();
         await db(c)
           .insert(userRace)
           .values({ user: authUser(c).sub, race: id })
           .onConflictDoNothing();
-        // updateDefault is false for a race switch made mid-session on an
-        // already-loaded device: selectedRace is the bootstrap default
-        // other devices/sessions pick up on a fresh start, and it would be
-        // surprising for it to change out from under them because of an
-        // action on a device that's already running.
-        if (updateDefault ?? true) {
-          await db(c)
-            .update(user)
-            .set({ selectedRace: id })
-            .where(eq(user.sub, authUser(c).sub));
-        }
 
-        return c.json<RaceData>({ id, name });
+        // Selected fresh rather than returned from the insert, since
+        // onConflictDoNothing means a resent create has no `.returning()`
+        // row of its own - this always reflects the race's current state.
+        const [created] = await db(c)
+          .select({
+            id: race.id,
+            name: race.name,
+            lapFilterSeconds: race.lapFilterSeconds,
+          })
+          .from(race)
+          .where(eq(race.id, id));
+
+        return c.json<RaceData>(created!);
       },
     )
     .get("/races/selected", async (c) => {
       const [row] = await db(c)
-        .select({ id: race.id, name: race.name })
+        .select({
+          id: race.id,
+          name: race.name,
+          lapFilterSeconds: race.lapFilterSeconds,
+        })
         .from(user)
         .innerJoin(race, eq(race.id, user.selectedRace))
         .where(eq(user.sub, authUser(c).sub));
 
       return c.json<RaceData | null>(row ?? null);
     })
+    .put(
+      "/races/selected",
+      jsonBody<{ id: string }>(),
+      async (c) => {
+        const { id } = c.req.valid("json");
+        // Requires membership, not just existence - selecting a race you
+        // haven't joined would leave the summary/scan flow pointed at
+        // something you have no access to.
+        const [found] = await db(c)
+          .select({
+            id: race.id,
+            name: race.name,
+            lapFilterSeconds: race.lapFilterSeconds,
+          })
+          .from(userRace)
+          .innerJoin(race, eq(race.id, userRace.race))
+          .where(and(eq(userRace.user, authUser(c).sub), eq(userRace.race, id)));
+        if (!found)
+          throw new HTTPException(400, { message: "Race not joined" });
+
+        await db(c)
+          .update(user)
+          .set({ selectedRace: id })
+          .where(eq(user.sub, authUser(c).sub));
+
+        return c.json<RaceData>(found);
+      },
+    )
     .get("/races/:id", async (c) => {
       const id = c.req.param("id");
       const [found] = await db(c)
-        .select({ id: race.id, name: race.name })
+        .select({
+          id: race.id,
+          name: race.name,
+          lapFilterSeconds: race.lapFilterSeconds,
+        })
         .from(race)
         .where(eq(race.id, id));
       if (!found) throw new HTTPException(404, { message: "Race not found" });
 
       return c.json<RaceData>(found);
     })
-    .post(
-      "/races/:id/join",
-      jsonBody<{ updateDefault?: boolean }>(),
+    .patch(
+      "/races/:id",
+      jsonBody<{ lapFilterSeconds: number }>(),
       async (c) => {
         const id = c.req.param("id");
-        const { updateDefault } = c.req.valid("json");
-        const [found] = await db(c)
-          .select({ id: race.id, name: race.name })
-          .from(race)
-          .where(eq(race.id, id));
-        if (!found)
+        const { lapFilterSeconds } = c.req.valid("json");
+        if (!Number.isInteger(lapFilterSeconds) || lapFilterSeconds < 0)
+          throw new HTTPException(400, {
+            message: "lapFilterSeconds must be a non-negative integer",
+          });
+
+        const [updated] = await db(c)
+          .update(race)
+          .set({ lapFilterSeconds })
+          .where(eq(race.id, id))
+          .returning({
+            id: race.id,
+            name: race.name,
+            lapFilterSeconds: race.lapFilterSeconds,
+          });
+        if (!updated)
           throw new HTTPException(404, { message: "Race not found" });
 
-        await db(c)
-          .insert(userRace)
-          .values({ user: authUser(c).sub, race: id })
-          .onConflictDoNothing();
-        if (updateDefault ?? true) {
-          await db(c)
-            .update(user)
-            .set({ selectedRace: id })
-            .where(eq(user.sub, authUser(c).sub));
-        }
-
-        return c.json<RaceData>(found);
+        return c.json<RaceData>(updated);
       },
     )
+    .post("/races/:id/join", async (c) => {
+      const id = c.req.param("id");
+      const [found] = await db(c)
+        .select({
+          id: race.id,
+          name: race.name,
+          lapFilterSeconds: race.lapFilterSeconds,
+        })
+        .from(race)
+        .where(eq(race.id, id));
+      if (!found) throw new HTTPException(404, { message: "Race not found" });
+
+      // Grants membership only - never touches the user's selected race
+      // (see PUT /races/selected).
+      await db(c)
+        .insert(userRace)
+        .values({ user: authUser(c).sub, race: id })
+        .onConflictDoNothing();
+
+      return c.json<RaceData>(found);
+    })
     .post(
       "/runners/scan",
       jsonBody<{ data: string; race: string; timestamp: string }>(),
@@ -225,7 +290,11 @@ export const createAPI = (loadDB: LoadDB) =>
         // scanned for, even if the device has since switched races
         // locally.
         const [selected] = await db(c)
-          .select({ id: race.id, name: race.name })
+          .select({
+            id: race.id,
+            name: race.name,
+            lapFilterSeconds: race.lapFilterSeconds,
+          })
           .from(userRace)
           .innerJoin(race, eq(race.id, userRace.race))
           .where(

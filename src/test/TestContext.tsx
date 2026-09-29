@@ -18,8 +18,8 @@ type MockedApi<T> = { [K in keyof T]?: Mock };
 
 type ApiOverrides = {
   races?: MockedApi<Pick<ApiClient["races"], "$get" | "$post">> & {
-    selected?: MockedApi<ApiClient["races"]["selected"]>;
-    ":id"?: MockedApi<Pick<ApiClient["races"][":id"], "$get">> & {
+    selected?: MockedApi<Pick<ApiClient["races"]["selected"], "$get" | "$put">>;
+    ":id"?: MockedApi<Pick<ApiClient["races"][":id"], "$get" | "$patch">> & {
       join?: MockedApi<ApiClient["races"][":id"]["join"]>;
       laps?: MockedApi<ApiClient["races"][":id"]["laps"]>;
       devices?: MockedApi<ApiClient["races"][":id"]["devices"]>;
@@ -48,9 +48,11 @@ function testContext(
       $post: overrides.api?.races?.$post ?? mockJSONRequest(null),
       selected: {
         $get: overrides.api?.races?.selected?.$get ?? mockJSONRequest(null),
+        $put: overrides.api?.races?.selected?.$put ?? mockJSONRequest(null),
       },
       ":id": {
         $get: overrides.api?.races?.[":id"]?.$get ?? mockJSONRequest(null),
+        $patch: overrides.api?.races?.[":id"]?.$patch ?? mockJSONRequest(null),
         join: {
           $post:
             overrides.api?.races?.[":id"]?.join?.$post ?? mockJSONRequest(null),

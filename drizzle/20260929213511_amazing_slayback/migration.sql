@@ -1,0 +1,1 @@
+ALTER TABLE "race" ADD COLUMN "lap_filter_seconds" integer DEFAULT 5 NOT NULL;

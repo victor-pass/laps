@@ -43,10 +43,10 @@ export const ChooseRace: Component = () => {
     if (!id) return;
     const race = races()?.find((r) => r.id === id);
     if (!race) return;
-    // Joining is optimistic and queued for sync - it always applies
-    // locally immediately, even offline, rather than waiting on or
-    // failing because of the network.
-    offline.joinRace(api, race);
+    // Already a member (it's in this device's own races list) - this is a
+    // pure selection, not a join, so it doesn't re-send membership.
+    // Applies locally immediately, even offline.
+    offline.selectRace(api, race);
     setSelected(race);
   };
 

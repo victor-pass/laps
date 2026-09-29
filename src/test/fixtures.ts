@@ -15,6 +15,7 @@ export function testRace(overrides: Partial<RaceData> = {}): RaceData {
   return {
     id: uuid(1),
     name: "Spring 5k",
+    lapFilterSeconds: 5,
     ...overrides,
   };
 }

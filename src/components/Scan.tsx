@@ -3,6 +3,7 @@ import { context } from "@/context";
 import type { RaceData, RunnerData, ScanResult } from "@/api";
 import { ConfirmRace } from "./ConfirmRace";
 import { parseRaceId } from "@/qr";
+import { createScanDedupe } from "@/scanDedupe";
 
 function name({ info }: RunnerData): string | undefined {
   if (typeof info === "string") return info;
@@ -16,6 +17,7 @@ export const Scan: Component = () => {
   const { api, scanner, offline, popup } = context();
   let video: HTMLVideoElement | undefined;
   let processing = false;
+  const scanDedupe = createScanDedupe();
 
   const [pendingRace, setPendingRace] = createSignal<RaceData>();
 
@@ -77,7 +79,10 @@ export const Scan: Component = () => {
       const raceId = parseRaceId(trimmed);
       if (raceId) {
         await scanRace(raceId);
-      } else {
+      } else if (scanDedupe.shouldProcess(trimmed)) {
+        // The camera decodes the same QR code on every frame it's in view,
+        // so without this a runner holding still for a second would queue
+        // a whole burst of laps instead of one.
         await scanRunner(trimmed);
       }
     } finally {

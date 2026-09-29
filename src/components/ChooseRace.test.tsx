@@ -60,12 +60,12 @@ describe("ChooseRace", () => {
       testRace({ id: uuid(1), name: "Spring 5k" }),
       testRace({ id: uuid(2), name: "Trail Run" }),
     ]);
-    const join$post = mockJSONRequest(null);
+    const select$put = mockJSONRequest(null);
 
     const views = loadViews(
       render(() => (
         <TestContext
-          api={{ races: { $get, ":id": { join: { $post: join$post } } } }}
+          api={{ races: { $get, selected: { $put: select$put } } }}
         >
           <ChooseRace />
         </TestContext>
@@ -76,10 +76,13 @@ describe("ChooseRace", () => {
     await waitFor(() => expect(chooseRace.options()).toContain("Trail Run"));
     chooseRace.choose("Trail Run");
 
-    expect(join$post).toHaveBeenCalledExactlyOnceWith({
-      param: { id: uuid(2) },
-      json: { updateDefault: true },
-    });
+    // Already a member - this is a pure selection, so it goes through
+    // PUT /races/selected, not a re-join.
+    await waitFor(() =>
+      expect(select$put).toHaveBeenCalledExactlyOnceWith({
+        json: { id: uuid(2) },
+      }),
+    );
   });
 
   it("switches to an inline text field to create a new race", async () => {
@@ -103,7 +106,7 @@ describe("ChooseRace", () => {
     createRace.submit();
 
     expect($post).toHaveBeenCalledExactlyOnceWith({
-      json: { id: expect.any(String), name: "Fall 10k", updateDefault: true },
+      json: { id: expect.any(String), name: "Fall 10k" },
     });
     await waitFor(() => expect(chooseRace.isCreating).toBe(false));
     await waitFor(() => expect(chooseRace.options()).toContain("Fall 10k"));
@@ -131,14 +134,14 @@ describe("ChooseRace", () => {
 
   it("selects a race optimistically even when the sync fails", async () => {
     const $get = mockJSONRequest([testRace({ id: uuid(1), name: "Spring 5k" })]);
-    const join$post = vi
+    const select$put = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 500 }));
 
     const views = loadViews(
       render(() => (
         <TestContext
-          api={{ races: { $get, ":id": { join: { $post: join$post } } } }}
+          api={{ races: { $get, selected: { $put: select$put } } }}
         >
           <ChooseRace />
         </TestContext>
@@ -149,15 +152,16 @@ describe("ChooseRace", () => {
     await waitFor(() => expect(chooseRace.options()).toContain("Spring 5k"));
     chooseRace.choose("Spring 5k");
 
-    // A join that can't reach the server (or is rejected transiently) is
-    // still selected locally and queued for retry - it never blocks or
+    // A selection that can't reach the server (or is rejected transiently)
+    // is still applied locally and queued for retry - it never blocks or
     // reverts the UI.
     await waitFor(() =>
       expect(chooseRace.selectedValue).toStrictEqual("Spring 5k"),
     );
-    expect(join$post).toHaveBeenCalledExactlyOnceWith({
-      param: { id: uuid(1) },
-      json: { updateDefault: true },
-    });
+    await waitFor(() =>
+      expect(select$put).toHaveBeenCalledExactlyOnceWith({
+        json: { id: uuid(1) },
+      }),
+    );
   });
 });

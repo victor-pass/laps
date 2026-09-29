@@ -5,6 +5,7 @@ import {
   serial,
   index,
   uniqueIndex,
+  integer,
   json,
   text,
   primaryKey,
@@ -13,6 +14,10 @@ import {
 export const race = pgTable("race", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  // Minimum seconds between two counted laps for the same runner, used
+  // client-side to collapse accidental repeat scans out of the summary and
+  // the scan popup. Doesn't affect what's stored - only what's displayed.
+  lapFilterSeconds: integer("lap_filter_seconds").notNull().default(5),
 });
 export const runner = pgTable("runner", {
   ref: uuid("ref").primaryKey(),
