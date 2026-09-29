@@ -155,24 +155,16 @@ button.confirm {
     position: relative;
 }
 
-/* main fills #root completely - full screen height, edge to edge - so
-   the toolbar (positioned on top of it, above) has the camera feed or
-   page content running underneath it rather than a gap of empty space. */
 main {
     position: absolute;
     inset: 0;
     overflow-y: auto;
 }
 
-/* The camera view is full-bleed. Every other page gets its own padding
-   instead, plus bottom clearance so its content doesn't end up hidden
-   under the floating toolbar. The popup toast is excluded since it floats
-   above whichever page is showing and positions itself. */
 main > *:not(.scan):not(.popup) {
     margin: 0;
     padding: var(--spacing-md);
     padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
-    /*padding-bottom: calc(var(--spacing-md) + var(--toolbar-clearance));*/
 }
 
 .scan {
@@ -224,7 +216,4 @@ main > *:not(.scan):not(.popup) {
 
 .laps {
     list-style: none;
-}
-
-@media (min-width: 640px) {
 }
