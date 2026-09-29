@@ -1,4 +1,4 @@
-# Lap Tracker
+# Laps
 Allows a team of users to manage a race where each racer has a QR code scanned each lap.
 
 ## App Interface
