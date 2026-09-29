@@ -3,8 +3,23 @@ import { hydrate } from "solid-js/web";
 import { ApiType } from "@/api";
 import { hc } from "hono/client";
 import { browserScanner } from "@/scanner";
+import { getDeviceId } from "@/device";
+import { createOfflineEngine, initSync } from "@/offline";
 
-const api = hc<ApiType>(window.location?.origin ?? "");
+const deviceId = getDeviceId();
+const offline = createOfflineEngine();
+
+const api = hc<ApiType>(window.location?.origin ?? "", {
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    headers.set("X-Device-Id", deviceId);
+    const race = offline.state().selectedRace;
+    if (race) headers.set("X-Race-Id", race.id);
+    return fetch(input, { ...init, headers });
+  },
+});
+
+void initSync(offline, api);
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -13,6 +28,6 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 }
 
 hydrate(
-  () => <App api={api} scanner={browserScanner} />,
+  () => <App api={api} scanner={browserScanner} offline={offline} />,
   document.getElementById("root")!,
 );

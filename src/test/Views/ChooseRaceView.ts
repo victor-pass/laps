@@ -4,10 +4,6 @@ import { fireEvent } from "@solidjs/testing-library";
 export class ChooseRaceView extends View {
   static selector = ".choose-race";
 
-  get alert() {
-    return this.$('p[role="alert"]')?.textContent;
-  }
-
   private get select() {
     return this.$("select") as HTMLSelectElement | null;
   }

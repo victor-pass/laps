@@ -13,7 +13,7 @@ function name({ info }: RunnerData): string | undefined {
 }
 
 export const Scan: Component = () => {
-  const { api, scanner, popup } = context();
+  const { api, scanner, offline, popup } = context();
   let video: HTMLVideoElement | undefined;
   let processing = false;
 
@@ -34,8 +34,7 @@ export const Scan: Component = () => {
 
   const scanRace = async (id: string) => {
     try {
-      const res = await api.races[":id"].$get({ param: { id } });
-      const race = (await res.json()) as RaceData;
+      const race = await offline.previewRace(api, id);
       scanner.stop();
       setPendingRace(race);
     } catch {
@@ -48,27 +47,18 @@ export const Scan: Component = () => {
     resumeScanning();
   };
 
-  const confirmRaceSwitch = async () => {
+  const confirmRaceSwitch = () => {
     const race = pendingRace();
     if (!race) return;
     setPendingRace(undefined);
-    try {
-      const res = await api.races[":id"].join.$post({
-        param: { id: race.id },
-      });
-      const joined = (await res.json()) as RaceData;
-      popup.set({ message: `Joined ${joined.name}`, type: "success" });
-    } catch {
-      popup.set({ message: "Unable to join race, try again", type: "error" });
-    } finally {
-      resumeScanning();
-    }
+    offline.joinRace(api, race);
+    popup.set({ message: `Joined ${race.name}`, type: "success" });
+    resumeScanning();
   };
 
   const scanRunner = async (data: string) => {
     try {
-      const res = await api.runners.scan.$post({ json: { data } });
-      const result = (await res.json()) as ScanResult;
+      const result: ScanResult = await offline.scan(api, data);
       const runnerName = name(result.runner);
       popup.set({
         message: `Lap ${result.lapCount}${runnerName ? ` - ${runnerName}` : ""}`,

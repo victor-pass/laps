@@ -1,30 +1,24 @@
-import { Component, createSignal, Setter } from "solid-js";
+import { Component, createSignal } from "solid-js";
 import { context } from "@/context";
 import type { RaceData } from "@/api";
 
 interface Props {
   onCancel: () => void;
   onCreate: (race: RaceData) => void;
-  setError: Setter<string | undefined>;
 }
 
 export const CreateRace: Component<Props> = (props) => {
-  const { api } = context();
+  const { api, offline } = context();
   const [name, setName] = createSignal("");
 
-  const submitCreate = async (e: SubmitEvent) => {
+  const submitCreate = (e: SubmitEvent) => {
     e.preventDefault();
     const raceName = name().trim();
     if (!raceName) return;
-    props.setError(undefined);
-    try {
-      const res = await api.races.$post({ json: { name: raceName } });
-      if (!res.ok) throw new Error("Failed to create race");
-      const race = (await res.json()) as RaceData;
-      props.onCreate(race);
-    } catch {
-      props.setError("Failed to create race");
-    }
+    // Creation is optimistic and queued for sync - it always applies
+    // locally immediately, even offline.
+    const race = offline.createRace(api, raceName);
+    props.onCreate(race);
   };
 
   return (

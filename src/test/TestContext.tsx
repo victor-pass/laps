@@ -3,6 +3,7 @@ import { Mock } from "vitest";
 import { AppContext, AppContextValue } from "@/context";
 import { ApiClient } from "@/api";
 import { QrScanner, noopScanner } from "@/scanner";
+import { OfflineEngine, createOfflineEngine, emptyState } from "@/offline";
 import {
   Accessor,
   createSignal,
@@ -16,11 +17,12 @@ import { Popup, PopupParams } from "@/components/Popup";
 type MockedApi<T> = { [K in keyof T]?: Mock };
 
 type ApiOverrides = {
-  laps?: MockedApi<ApiClient["laps"]>;
   races?: MockedApi<Pick<ApiClient["races"], "$get" | "$post">> & {
     selected?: MockedApi<ApiClient["races"]["selected"]>;
     ":id"?: MockedApi<Pick<ApiClient["races"][":id"], "$get">> & {
       join?: MockedApi<ApiClient["races"][":id"]["join"]>;
+      laps?: MockedApi<ApiClient["races"][":id"]["laps"]>;
+      devices?: MockedApi<ApiClient["races"][":id"]["devices"]>;
     };
   };
   runners?: {
@@ -31,6 +33,7 @@ type ApiOverrides = {
 export type AppContextOverrides = {
   api?: ApiOverrides;
   scanner?: QrScanner;
+  offline?: OfflineEngine;
   popup?: {
     set: (message?: PopupParams) => void;
   };
@@ -40,10 +43,6 @@ function testContext(
   overrides: AppContextOverrides,
 ): [AppContextValue, Accessor<PopupParams | undefined>] {
   const api = {
-    laps: {
-      $get: mockJSONRequest([]),
-      ...overrides.api?.laps,
-    },
     races: {
       $get: overrides.api?.races?.$get ?? mockJSONRequest([]),
       $post: overrides.api?.races?.$post ?? mockJSONRequest(null),
@@ -55,6 +54,13 @@ function testContext(
         join: {
           $post:
             overrides.api?.races?.[":id"]?.join?.$post ?? mockJSONRequest(null),
+        },
+        laps: {
+          $get: overrides.api?.races?.[":id"]?.laps?.$get ?? mockJSONRequest([]),
+        },
+        devices: {
+          $get:
+            overrides.api?.races?.[":id"]?.devices?.$get ?? mockJSONRequest([]),
         },
       },
     },
@@ -70,7 +76,18 @@ function testContext(
     set: (message?: PopupParams) => setPopup(message),
   };
 
-  return [{ api, scanner: overrides.scanner ?? noopScanner, popup }, getPopup];
+  return [
+    {
+      api,
+      scanner: overrides.scanner ?? noopScanner,
+      // A fresh, in-memory (non-localStorage) engine by default so tests
+      // are isolated from each other; pass `offline` explicitly to seed a
+      // selected race or assert on queued/synced state.
+      offline: overrides.offline ?? createOfflineEngine(emptyState()),
+      popup,
+    },
+    getPopup,
+  ];
 }
 
 export const TestContext: ParentComponent<AppContextOverrides> = (props) => {

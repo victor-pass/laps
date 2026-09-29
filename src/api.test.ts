@@ -8,9 +8,10 @@ import { uuid } from "@/test/fixtures";
 
 const JWT_SECRET = randomBytes(32).toString("hex");
 
-const headers = async (sub: string) => ({
+const headers = async (sub: string, extra: Record<string, string> = {}) => ({
   headers: {
     Cookie: `auth_token=${await sign({ sub }, JWT_SECRET)}`,
+    ...extra,
   },
 });
 
@@ -25,8 +26,8 @@ async function setup() {
   return { db, client, seed };
 }
 
-describe("laps.$get", () => {
-  it("returns laps from group the user is focussed on", async () => {
+describe("races/:id/laps", () => {
+  it("returns laps for the given race", async () => {
     const { client, seed } = await setup();
     const jan1970 = new Date("1970-01-01T00:00:00Z");
     const jan2020 = new Date("2020-01-01T12:00:00Z");
@@ -35,14 +36,17 @@ describe("laps.$get", () => {
         { id: uuid(0), name: "focus race" },
         { id: uuid(1), name: "Other race" },
       ],
-      user: [{ sub: "user", name: "user", selectedRace: uuid(0) }],
+      user: [{ sub: "user", name: "user" }],
       runner: [{ ref: uuid(1), info: { name: "tom" } }],
       lap: [
         { timestamp: jan2020, runner: uuid(1), race: uuid(0) },
         { timestamp: jan1970, runner: uuid(1), race: uuid(1) },
       ],
     });
-    const res = await client.laps.$get({}, await headers("user"));
+    const res = await client.races[":id"].laps.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
 
     expect(await res.json()).toEqual([
       {
@@ -88,6 +92,45 @@ describe("races", () => {
       await headers("user"),
     );
     expect(await selectedRes.json()).toEqual(created);
+  });
+
+  it("creates a race with a client-supplied id, and a resend is a no-op", async () => {
+    const { client, seed } = await setup();
+    await seed({ user: [{ sub: "user", name: "user" }] });
+
+    const json = { id: uuid(5), name: "Spring 5k" };
+    const first = await client.races.$post({ json }, await headers("user"));
+    const second = await client.races.$post({ json }, await headers("user"));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({ id: uuid(5), name: "Spring 5k" });
+
+    const res = await client.races.$get({}, await headers("user"));
+    expect(await res.json()).toEqual([{ id: uuid(5), name: "Spring 5k" }]);
+  });
+
+  it("does not change the user's selected race when updateDefault is false", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      user: [{ sub: "user", name: "user", selectedRace: uuid(1) }],
+      race: [{ id: uuid(1), name: "Spring 5k" }],
+      userRace: [{ user: "user", race: uuid(1) }],
+    });
+
+    await client.races.$post(
+      { json: { name: "Trail Run", updateDefault: false } },
+      await headers("user"),
+    );
+
+    const selectedRes = await client.races.selected.$get(
+      {},
+      await headers("user"),
+    );
+    expect(await selectedRes.json()).toEqual({
+      id: uuid(1),
+      name: "Spring 5k",
+    });
   });
 
   it("rejects creating a race without a name", async () => {
@@ -140,7 +183,7 @@ describe("races", () => {
     });
 
     const res = await client.races[":id"].join.$post(
-      { param: { id: uuid(3) } },
+      { param: { id: uuid(3) }, json: {} },
       await headers("user"),
     );
     expect(await res.json()).toEqual({ id: uuid(3), name: "Trail Run" });
@@ -152,12 +195,43 @@ describe("races", () => {
     expect(await selectedRes.json()).toEqual({ id: uuid(3), name: "Trail Run" });
   });
 
+  it("joins a race without changing the selected race when updateDefault is false", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      user: [{ sub: "user", name: "user", selectedRace: uuid(1) }],
+      race: [
+        { id: uuid(1), name: "Spring 5k" },
+        { id: uuid(3), name: "Trail Run" },
+      ],
+      userRace: [{ user: "user", race: uuid(1) }],
+    });
+
+    await client.races[":id"].join.$post(
+      { param: { id: uuid(3) }, json: { updateDefault: false } },
+      await headers("user"),
+    );
+
+    const selectedRes = await client.races.selected.$get(
+      {},
+      await headers("user"),
+    );
+    expect(await selectedRes.json()).toEqual({
+      id: uuid(1),
+      name: "Spring 5k",
+    });
+
+    const races = await client.races.$get({}, await headers("user"));
+    expect(await races.json()).toEqual(
+      expect.arrayContaining([{ id: uuid(3), name: "Trail Run" }]),
+    );
+  });
+
   it("404s when joining an unknown race id", async () => {
     const { client, seed } = await setup();
     await seed({ user: [{ sub: "user", name: "user" }] });
 
     const res = await client.races[":id"].join.$post(
-      { param: { id: uuid(9) } },
+      { param: { id: uuid(9) }, json: {} },
       await headers("user"),
     );
     expect(res.status).toBe(404);
@@ -169,11 +243,18 @@ describe("runners.scan", () => {
     const { client, seed } = await setup();
     await seed({
       race: [{ id: uuid(0), name: "Spring 5k" }],
-      user: [{ sub: "user", name: "user", selectedRace: uuid(0) }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
     });
 
     const res = await client.runners.scan.$post(
-      { json: { data: "bib:42" } },
+      {
+        json: {
+          data: "bib:42",
+          race: uuid(0),
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      },
       await headers("user"),
     );
     expect(res.status).toBe(200);
@@ -188,15 +269,28 @@ describe("runners.scan", () => {
     const { client, seed } = await setup();
     await seed({
       race: [{ id: uuid(0), name: "Spring 5k" }],
-      user: [{ sub: "user", name: "user", selectedRace: uuid(0) }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
     });
 
     const first = await client.runners.scan.$post(
-      { json: { data: "bib:42" } },
+      {
+        json: {
+          data: "bib:42",
+          race: uuid(0),
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      },
       await headers("user"),
     );
     const second = await client.runners.scan.$post(
-      { json: { data: "bib:42" } },
+      {
+        json: {
+          data: "bib:42",
+          race: uuid(0),
+          timestamp: "2026-01-01T00:01:00.000Z",
+        },
+      },
       await headers("user"),
     );
 
@@ -207,12 +301,43 @@ describe("runners.scan", () => {
     expect(secondBody.lapCount).toBe(2);
   });
 
-  it("400s when no race is selected", async () => {
+  it("dedupes a resent scan with the same runner, race, and timestamp", async () => {
     const { client, seed } = await setup();
-    await seed({ user: [{ sub: "user", name: "user" }] });
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
+    });
+    const json = {
+      data: "bib:42",
+      race: uuid(0),
+      timestamp: "2026-01-01T00:00:00.000Z",
+    };
+
+    await client.runners.scan.$post({ json }, await headers("user"));
+    const res = await client.runners.scan.$post(
+      { json },
+      await headers("user"),
+    );
+
+    expect((await res.json()).lapCount).toBe(1);
+  });
+
+  it("400s when the race hasn't been joined", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+    });
 
     const res = await client.runners.scan.$post(
-      { json: { data: "bib:42" } },
+      {
+        json: {
+          data: "bib:42",
+          race: uuid(0),
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      },
       await headers("user"),
     );
     expect(res.status).toBe(400);
@@ -222,13 +347,85 @@ describe("runners.scan", () => {
     const { client, seed } = await setup();
     await seed({
       race: [{ id: uuid(0), name: "Spring 5k" }],
-      user: [{ sub: "user", name: "user", selectedRace: uuid(0) }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
     });
 
     const res = await client.runners.scan.$post(
-      { json: { data: "" } },
+      {
+        json: {
+          data: "",
+          race: uuid(0),
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      },
       await headers("user"),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("400s for an invalid timestamp", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
+    });
+
+    const res = await client.runners.scan.$post(
+      { json: { data: "bib:42", race: uuid(0), timestamp: "not-a-date" } },
+      await headers("user"),
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("races/:id/devices", () => {
+  it("records the device from the request headers and lists it for its race", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "Stephen" }],
+      userRace: [{ user: "user", race: uuid(0) }],
+    });
+    const deviceId = uuid(5);
+
+    await client.runners.scan.$post(
+      {
+        json: {
+          data: "bib:42",
+          race: uuid(0),
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      },
+      await headers("user", {
+        "X-Device-Id": deviceId,
+        "X-Race-Id": uuid(0),
+      }),
+    );
+
+    const res = await client.races[":id"].devices.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    expect(await res.json()).toEqual([
+      { id: deviceId, user: "Stephen", label: null, lastSeen: expect.any(String) },
+    ]);
+  });
+
+  it("does not record a device when no device id header is sent", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+    });
+
+    await client.races.$get({}, await headers("user"));
+
+    const res = await client.races[":id"].devices.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    expect(await res.json()).toEqual([]);
   });
 });

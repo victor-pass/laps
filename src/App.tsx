@@ -2,6 +2,7 @@ import { Accessor, Component, createSignal, Show } from "solid-js";
 import { Router, Route, A, RouteSectionProps } from "@solidjs/router";
 import { ApiClient } from "@/api";
 import { QrScanner } from "@/scanner";
+import { OfflineEngine } from "@/offline";
 import { AppContext } from "@/context";
 import { Laps } from "@/components/Laps";
 import { ShowRaceQR } from "@/components/SelectedRaceQR";
@@ -12,6 +13,7 @@ import { Popup, PopupParams } from "./components/Popup";
 interface AppProps {
   api: ApiClient;
   scanner: QrScanner;
+  offline: OfflineEngine;
   url?: string;
 }
 
@@ -53,8 +55,8 @@ export const App: Component<AppProps> = (props) => {
   return (
     <AppContext.Provider
       value={
-        // eslint-disable-next-line solid/reactivity -- api/scanner don't change
-        { api: props.api, scanner: props.scanner, popup }
+        // eslint-disable-next-line solid/reactivity -- api/scanner/offline don't change
+        { api: props.api, scanner: props.scanner, offline: props.offline, popup }
       }
     >
       <Router url={props.url ?? ""} root={Layout(get)}>

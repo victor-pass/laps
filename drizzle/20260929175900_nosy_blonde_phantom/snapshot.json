@@ -1,11 +1,17 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "ac93a85b-682c-489f-818c-dbc102b40cf1",
+  "id": "1270e2a0-ed70-4ce8-a7d3-d09ffc696c8b",
   "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
+    "ac93a85b-682c-489f-818c-dbc102b40cf1"
   ],
   "ddl": [
+    {
+      "isRlsEnabled": false,
+      "name": "device",
+      "entityType": "tables",
+      "schema": "public"
+    },
     {
       "isRlsEnabled": false,
       "name": "lap",
@@ -35,6 +41,71 @@
       "name": "user_race",
       "entityType": "tables",
       "schema": "public"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_sub",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "race_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "label",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_seen",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
     },
     {
       "type": "serial",
@@ -227,6 +298,75 @@
       "table": "lap"
     },
     {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "runner_ref",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "race_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "timestamp",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "lap_runner_race_timestamp_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "lap"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_sub"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "sub"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "device_user_sub_user_sub_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "race_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "race",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "device_race_id_race_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "device"
+    },
+    {
       "nameExplicit": false,
       "columns": [
         "runner_ref"
@@ -321,6 +461,16 @@
       "entityType": "pks",
       "schema": "public",
       "table": "user_race"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "device_pkey",
+      "schema": "public",
+      "table": "device",
+      "entityType": "pks"
     },
     {
       "columns": [

@@ -1,13 +1,9 @@
 import { expect, describe, it, vi } from "vitest";
-import { render } from "@solidjs/testing-library";
+import { render, waitFor } from "@solidjs/testing-library";
 import { Scan } from "./Scan";
 import { TestContext } from "@/test/TestContext";
-import {
-  mockJSONRequest,
-  testRace,
-  testScanResult,
-  uuid,
-} from "@/test/fixtures";
+import { createOfflineEngine, emptyState } from "@/offline";
+import { mockJSONRequest, testRace, uuid } from "@/test/fixtures";
 import type { QrScanner } from "@/scanner";
 import { loadViews } from "@/test/Views/";
 import { raceQrData } from "@/qr";
@@ -25,16 +21,17 @@ function fakeScanner() {
 describe("Scan", () => {
   it("records a lap for the scanned racer", async () => {
     const { scanner, decode } = fakeScanner();
-    const $post = mockJSONRequest(
-      testScanResult({
-        lapCount: 3,
-        runner: { ref: "runner-1", info: "Bib 42" },
-      }),
-    );
+    const $post = mockJSONRequest(null);
+    const race = testRace();
+    const offline = createOfflineEngine({ ...emptyState(), selectedRace: race });
 
     const views = loadViews(
       render(() => (
-        <TestContext scanner={scanner} api={{ runners: { scan: { $post } } }}>
+        <TestContext
+          scanner={scanner}
+          offline={offline}
+          api={{ runners: { scan: { $post } } }}
+        >
           <Scan />
         </TestContext>
       )),
@@ -44,23 +41,26 @@ describe("Scan", () => {
 
     const popup = await views.popup();
     expect($post).toHaveBeenCalledExactlyOnceWith({
-      json: { data: "Bib 42" },
+      json: { data: "Bib 42", race: race.id, timestamp: expect.any(String) },
     });
-    expect(popup.message()).toStrictEqual("Lap 3 - Bib 42");
+    expect(popup.message()).toStrictEqual("Lap 1 - Bib 42");
   });
 
   it("labels the runner by name when the scanned data is a json object", async () => {
     const { scanner, decode } = fakeScanner();
-    const $post = mockJSONRequest(
-      testScanResult({
-        lapCount: 1,
-        runner: { ref: "runner-1", info: { name: "Jamie" } },
-      }),
-    );
+    const $post = mockJSONRequest(null);
+    const offline = createOfflineEngine({
+      ...emptyState(),
+      selectedRace: testRace(),
+    });
 
     const views = loadViews(
       render(() => (
-        <TestContext scanner={scanner} api={{ runners: { scan: { $post } } }}>
+        <TestContext
+          scanner={scanner}
+          offline={offline}
+          api={{ runners: { scan: { $post } } }}
+        >
           <Scan />
         </TestContext>
       )),
@@ -73,16 +73,19 @@ describe("Scan", () => {
 
   it("omits the name suffix when the scanned data has no name", async () => {
     const { scanner, decode } = fakeScanner();
-    const $post = mockJSONRequest(
-      testScanResult({
-        lapCount: 1,
-        runner: { ref: "runner-1", info: { bib: 42 } },
-      }),
-    );
+    const $post = mockJSONRequest(null);
+    const offline = createOfflineEngine({
+      ...emptyState(),
+      selectedRace: testRace(),
+    });
 
     const views = loadViews(
       render(() => (
-        <TestContext scanner={scanner} api={{ runners: { scan: { $post } } }}>
+        <TestContext
+          scanner={scanner}
+          offline={offline}
+          api={{ runners: { scan: { $post } } }}
+        >
           <Scan />
         </TestContext>
       )),
@@ -93,15 +96,42 @@ describe("Scan", () => {
     expect(popup.message()).toStrictEqual("Lap 1");
   });
 
-  it("shows an error when the scan can't be recorded", async () => {
+  it("counts a repeat scan of the same runner against the local total", async () => {
     const { scanner, decode } = fakeScanner();
-    const $post = vi
-      .fn()
-      .mockResolvedValue(new Response(null, { status: 400 }));
+    const $post = mockJSONRequest(null);
+    const offline = createOfflineEngine({
+      ...emptyState(),
+      selectedRace: testRace(),
+    });
+
+    const rendered = render(() => (
+      <TestContext
+        scanner={scanner}
+        offline={offline}
+        api={{ runners: { scan: { $post } } }}
+      >
+        <Scan />
+      </TestContext>
+    ));
+    const views = loadViews(rendered);
+
+    decode("Bib 42");
+    await views.popup();
+    decode("Bib 42");
+    await waitFor(() =>
+      expect(rendered.container.querySelector(".popup")?.textContent).toBe(
+        "Lap 2 - Bib 42",
+      ),
+    );
+  });
+
+  it("shows an error when no race is selected", async () => {
+    const { scanner, decode } = fakeScanner();
+    const offline = createOfflineEngine(emptyState());
 
     const views = loadViews(
       render(() => (
-        <TestContext scanner={scanner} api={{ runners: { scan: { $post } } }}>
+        <TestContext scanner={scanner} offline={offline}>
           <Scan />
         </TestContext>
       )),
@@ -117,7 +147,7 @@ describe("Scan", () => {
     const preview$get = mockJSONRequest(
       testRace({ id: uuid(1), name: "Trail Run" }),
     );
-    const join$post = mockJSONRequest(testRace({ id: uuid(1), name: "Trail Run" }));
+    const join$post = mockJSONRequest(null);
 
     const views = loadViews(
       render(() => (
@@ -145,6 +175,7 @@ describe("Scan", () => {
     const popup = await views.popup();
     expect(join$post).toHaveBeenCalledExactlyOnceWith({
       param: { id: uuid(1) },
+      json: { updateDefault: true },
     });
     expect(popup.message()).toStrictEqual("Joined Trail Run");
     expect(start).toHaveBeenCalledTimes(2);

@@ -60,9 +60,7 @@ describe("ChooseRace", () => {
       testRace({ id: uuid(1), name: "Spring 5k" }),
       testRace({ id: uuid(2), name: "Trail Run" }),
     ]);
-    const join$post = mockJSONRequest(
-      testRace({ id: uuid(2), name: "Trail Run" }),
-    );
+    const join$post = mockJSONRequest(null);
 
     const views = loadViews(
       render(() => (
@@ -80,12 +78,13 @@ describe("ChooseRace", () => {
 
     expect(join$post).toHaveBeenCalledExactlyOnceWith({
       param: { id: uuid(2) },
+      json: { updateDefault: true },
     });
   });
 
   it("switches to an inline text field to create a new race", async () => {
     const $get = mockJSONRequest([testRace({ name: "Spring 5k" })]);
-    const $post = mockJSONRequest(testRace({ id: uuid(9), name: "Fall 10k" }));
+    const $post = mockJSONRequest(null);
 
     const views = loadViews(
       render(() => (
@@ -104,9 +103,10 @@ describe("ChooseRace", () => {
     createRace.submit();
 
     expect($post).toHaveBeenCalledExactlyOnceWith({
-      json: { name: "Fall 10k" },
+      json: { id: expect.any(String), name: "Fall 10k", updateDefault: true },
     });
     await waitFor(() => expect(chooseRace.isCreating).toBe(false));
+    await waitFor(() => expect(chooseRace.options()).toContain("Fall 10k"));
   });
 
   it("returns to the select when creating is cancelled", async () => {
@@ -129,8 +129,8 @@ describe("ChooseRace", () => {
     expect(chooseRace.isCreating).toBe(false);
   });
 
-  it("shows an error when selecting a race fails", async () => {
-    const $get = mockJSONRequest([testRace({ name: "Spring 5k" })]);
+  it("selects a race optimistically even when the sync fails", async () => {
+    const $get = mockJSONRequest([testRace({ id: uuid(1), name: "Spring 5k" })]);
     const join$post = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 500 }));
@@ -149,8 +149,15 @@ describe("ChooseRace", () => {
     await waitFor(() => expect(chooseRace.options()).toContain("Spring 5k"));
     chooseRace.choose("Spring 5k");
 
+    // A join that can't reach the server (or is rejected transiently) is
+    // still selected locally and queued for retry - it never blocks or
+    // reverts the UI.
     await waitFor(() =>
-      expect(chooseRace.alert).toStrictEqual("Failed to select race"),
+      expect(chooseRace.selectedValue).toStrictEqual("Spring 5k"),
     );
+    expect(join$post).toHaveBeenCalledExactlyOnceWith({
+      param: { id: uuid(1) },
+      json: { updateDefault: true },
+    });
   });
 });

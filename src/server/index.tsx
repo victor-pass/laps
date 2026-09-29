@@ -10,6 +10,7 @@ import { createApiProxy } from "./ApiProxy";
 import { renderToStringAsync } from "solid-js/web";
 import { useAuthenticator, requireAuthPage } from "@/security";
 import { noopScanner } from "@/scanner";
+import { noopOfflineEngine } from "@/offline";
 
 const api = createAPI(neonDB);
 const apiProxy = createApiProxy(api);
@@ -21,6 +22,7 @@ const renderPage = async (c: Context) =>
           createApp({
             api: apiProxy(c),
             scanner: noopScanner,
+            offline: noopOfflineEngine,
             url: c.req.path,
           }),
         ),
