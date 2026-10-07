@@ -7,8 +7,8 @@ const scanItems = [
 ];
 
 const pageItems = [
-  { href: "/race", label: "Summary" },
-  { href: "/race/qr", label: "Share" },
+  { href: "/summary", label: "Summary" },
+  { href: "/share", label: "Share" },
 ];
 
 export const Menu: Component = () => {

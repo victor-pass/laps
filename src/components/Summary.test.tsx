@@ -1,11 +1,11 @@
 import { expect, describe, it } from "vitest";
 import { render, waitFor } from "@solidjs/testing-library";
-import { Laps } from "./Laps";
+import { Summary } from "./Summary";
 import { TestContext } from "@/test/TestContext";
 import { mockJSONRequest, testLap, testRace, uuid } from "@/test/fixtures";
 import { loadViews } from "@/test/Views/";
 
-describe("Laps", () => {
+describe("Summary", () => {
   it("shows devices and lap counts for the selected race", async () => {
     const selected$get = mockJSONRequest(testRace({ id: uuid(1) }));
     const laps$get = mockJSONRequest([
@@ -23,7 +23,7 @@ describe("Laps", () => {
             },
           }}
         >
-          <Laps />
+          <Summary />
         </TestContext>
       )),
     );

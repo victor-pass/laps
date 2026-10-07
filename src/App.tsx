@@ -4,7 +4,7 @@ import { ApiClient } from "@/api";
 import { QrScanner } from "@/scanner";
 import { OfflineEngine } from "@/offline";
 import { AppContext } from "@/context";
-import { Laps } from "@/components/Laps";
+import { Summary } from "@/components/Summary";
 import { ShowRaceQR } from "@/components/SelectedRaceQR";
 import { Scan } from "@/components/Scan";
 import { ChooseRace } from "@/components/ChooseRace";
@@ -52,8 +52,8 @@ export const App: Component<AppProps> = (props) => {
           path="/scanBack"
           component={() => <Scan facing="environment" />}
         />
-        <Route path="/race" component={Laps} />
-        <Route path="/race/qr" component={ShowRaceQR} />
+        <Route path="/summary" component={Summary} />
+        <Route path="/share" component={ShowRaceQR} />
       </Router>
     </AppContext.Provider>
   );

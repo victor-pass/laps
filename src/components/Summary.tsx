@@ -4,7 +4,7 @@ import type { RaceData } from "@/api";
 import { Devices } from "@/components/Devices";
 import { LapCounts } from "@/components/LapCounts";
 
-export const Laps: Component = () => {
+export const Summary: Component = () => {
   const { api } = context();
   const [race] = createResource(async () => {
     const res = await api.races.selected.$get();
