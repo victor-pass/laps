@@ -4,6 +4,7 @@ import type { RaceData, RunnerData, ScanResult } from "@/api";
 import { ConfirmRace } from "./ConfirmRace";
 import { parseRaceId } from "@/qr";
 import { createScanDedupe } from "@/scanDedupe";
+import type { CameraFacing } from "@/scanner";
 
 function name({ info }: RunnerData): string | undefined {
   if (typeof info === "string") return info;
@@ -13,7 +14,7 @@ function name({ info }: RunnerData): string | undefined {
   }
 }
 
-export const Scan: Component = () => {
+export const Scan: Component<{ facing: CameraFacing }> = (props) => {
   const { api, scanner, offline, popup } = context();
   let video: HTMLVideoElement | undefined;
   let processing = false;
@@ -22,7 +23,7 @@ export const Scan: Component = () => {
   const [pendingRace, setPendingRace] = createSignal<RaceData>();
 
   function resumeScanning() {
-    if (video) scanner.start(video, onDecode);
+    if (video) scanner.start(video, onDecode, props.facing);
   }
 
   function scan() {
@@ -91,7 +92,7 @@ export const Scan: Component = () => {
   };
 
   onMount(scan);
-  onCleanup(scanner.stop);
+  onCleanup(() => scanner.stop());
 
   return (
     <div class="scan">

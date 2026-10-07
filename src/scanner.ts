@@ -1,18 +1,28 @@
 import jsQR from "jsqr";
 
+export type CameraFacing = "user" | "environment";
+
 class Scanner implements QrScanner {
-  stopped: boolean = false;
+  // Bumped on every start/stop so a getUserMedia or animation frame from a
+  // previous session (e.g. the front camera, before switching to the back)
+  // can tell it's stale and must not attach or keep decoding.
+  session = 0;
   frame?: number;
   stream?: MediaStream;
 
-  start(video: HTMLVideoElement, onDecode: (text: string) => void) {
-    this.stopped = false;
+  start = (
+    video: HTMLVideoElement,
+    onDecode: (text: string) => void,
+    facing: CameraFacing = "environment",
+  ) => {
+    this.stop();
+    const session = this.session;
 
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
     const tick = () => {
-      if (this.stopped) return;
+      if (session !== this.session) return;
       if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -25,31 +35,42 @@ class Scanner implements QrScanner {
     };
 
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" } })
+      .getUserMedia({ video: { facingMode: facing } })
       .then((mediaStream) => {
-        if (this.stopped) {
+        if (session !== this.session) {
           mediaStream.getTracks().forEach((track) => track.stop());
           return;
         }
         this.stream = mediaStream;
         video.srcObject = this.stream;
-        void video.play();
+        video.play().catch((err: unknown) => {
+          // A restart on the same <video> (camera switch, resuming after a
+          // race prompt) replaces srcObject, which aborts the pending play.
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          console.error("Failed to play camera:", err);
+        });
         this.frame = requestAnimationFrame(tick);
       })
       .catch((err: unknown) => {
         console.error("Failed to start camera:", err);
       });
-  }
+  };
 
-  stop() {
-    this.stopped = true;
+  stop = () => {
+    this.session++;
     if (this.frame) cancelAnimationFrame(this.frame);
+    this.frame = undefined;
     this.stream?.getTracks().forEach((track) => track.stop());
-  }
+    this.stream = undefined;
+  };
 }
 
 export interface QrScanner {
-  start(video: HTMLVideoElement, onDecode: (text: string) => void): void;
+  start(
+    video: HTMLVideoElement,
+    onDecode: (text: string) => void,
+    facing?: CameraFacing,
+  ): void;
   stop(): void;
 }
 

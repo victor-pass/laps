@@ -1,5 +1,5 @@
-import { Accessor, Component, createSignal, Show } from "solid-js";
-import { Router, Route, A, RouteSectionProps } from "@solidjs/router";
+import { Accessor, Component, createSignal, Show, splitProps } from "solid-js";
+import { Router, Route, Navigate, RouteSectionProps } from "@solidjs/router";
 import { ApiClient } from "@/api";
 import { QrScanner } from "@/scanner";
 import { OfflineEngine } from "@/offline";
@@ -9,6 +9,7 @@ import { ShowRaceQR } from "@/components/SelectedRaceQR";
 import { Scan } from "@/components/Scan";
 import { ChooseRace } from "@/components/ChooseRace";
 import { Popup, PopupParams } from "./components/Popup";
+import { Menu } from "@/components/Menu";
 
 interface AppProps {
   api: ApiClient;
@@ -19,10 +20,8 @@ interface AppProps {
 
 const Layout: (
   popup: Accessor<PopupParams | undefined>,
-) => Component<RouteSectionProps> = (
-  popup: Accessor<PopupParams | undefined>,
-) => {
-  return (props) => (
+) => Component<RouteSectionProps> =
+  (popup: Accessor<PopupParams | undefined>) => (props) => (
     <>
       <main>
         {props.children}
@@ -31,36 +30,28 @@ const Layout: (
         </Show>
       </main>
       <footer>
-        <nav>
-          <A href="/" end>
-            Scan
-          </A>
-          <A href="/race" end>
-            Summary
-          </A>
-          <A href="/race/qr">Share</A>
-        </nav>
+        <Menu />
         <ChooseRace />
       </footer>
     </>
   );
-};
 
 export const App: Component<AppProps> = (props) => {
   const [get, set] = createSignal<PopupParams>();
   const popup = {
     set: (message?: PopupParams) => set(message),
   };
+  const [context, _] = splitProps(props, ["api", "scanner", "offline"]);
 
   return (
-    <AppContext.Provider
-      value={
-        // eslint-disable-next-line solid/reactivity -- api/scanner/offline don't change
-        { api: props.api, scanner: props.scanner, offline: props.offline, popup }
-      }
-    >
+    <AppContext.Provider value={{ ...context, popup }}>
       <Router url={props.url ?? ""} root={Layout(get)}>
-        <Route path="/" component={Scan} />
+        <Route path="/" component={() => <Navigate href="/scanFront" />} />
+        <Route path="/scanFront" component={() => <Scan facing="user" />} />
+        <Route
+          path="/scanBack"
+          component={() => <Scan facing="environment" />}
+        />
         <Route path="/race" component={Laps} />
         <Route path="/race/qr" component={ShowRaceQR} />
       </Router>

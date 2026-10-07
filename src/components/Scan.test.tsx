@@ -32,7 +32,7 @@ describe("Scan", () => {
           offline={offline}
           api={{ runners: { scan: { $post } } }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -61,7 +61,7 @@ describe("Scan", () => {
           offline={offline}
           api={{ runners: { scan: { $post } } }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -86,7 +86,7 @@ describe("Scan", () => {
           offline={offline}
           api={{ runners: { scan: { $post } } }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -111,7 +111,7 @@ describe("Scan", () => {
           offline={offline}
           api={{ runners: { scan: { $post } } }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -133,7 +133,7 @@ describe("Scan", () => {
     const views = loadViews(
       render(() => (
         <TestContext scanner={scanner} offline={offline}>
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -162,7 +162,7 @@ describe("Scan", () => {
             },
           }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -205,7 +205,7 @@ describe("Scan", () => {
           scanner={scanner}
           api={{ races: { ":id": { $get: preview$get, join: { $post: join$post } } } }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
@@ -231,7 +231,7 @@ describe("Scan", () => {
           scanner={scanner}
           api={{ races: { ":id": { $get: preview$get } } }}
         >
-          <Scan />
+          <Scan facing="environment" />
         </TestContext>
       )),
     );
