@@ -10,7 +10,7 @@ import { Popups, createPopupService, PopupService } from "@/components/Popup";
 
 type MockedApi<T> = { [K in keyof T]?: Mock };
 
-type ApiOverrides = {
+export type ApiOverrides = {
   races?: MockedApi<Pick<ApiClient["races"], "$get" | "$post">> & {
     selected?: MockedApi<Pick<ApiClient["races"]["selected"], "$get" | "$put">>;
     ":id"?: MockedApi<Pick<ApiClient["races"][":id"], "$get" | "$patch">> & {
@@ -31,40 +31,42 @@ export type AppContextOverrides = {
   popup?: PopupService;
 };
 
-function testContext(overrides: AppContextOverrides): AppContextValue {
-  const api = {
+export function testApi(overrides: ApiOverrides = {}): ApiClient {
+  return {
     races: {
-      $get: overrides.api?.races?.$get ?? mockJSONRequest([]),
-      $post: overrides.api?.races?.$post ?? mockJSONRequest(null),
+      $get: overrides.races?.$get ?? mockJSONRequest([]),
+      $post: overrides.races?.$post ?? mockJSONRequest(null),
       selected: {
-        $get: overrides.api?.races?.selected?.$get ?? mockJSONRequest(null),
-        $put: overrides.api?.races?.selected?.$put ?? mockJSONRequest(null),
+        $get: overrides.races?.selected?.$get ?? mockJSONRequest(null),
+        $put: overrides.races?.selected?.$put ?? mockJSONRequest(null),
       },
       ":id": {
-        $get: overrides.api?.races?.[":id"]?.$get ?? mockJSONRequest(null),
-        $patch: overrides.api?.races?.[":id"]?.$patch ?? mockJSONRequest(null),
+        $get: overrides.races?.[":id"]?.$get ?? mockJSONRequest(null),
+        $patch: overrides.races?.[":id"]?.$patch ?? mockJSONRequest(null),
         join: {
           $post:
-            overrides.api?.races?.[":id"]?.join?.$post ?? mockJSONRequest(null),
+            overrides.races?.[":id"]?.join?.$post ?? mockJSONRequest(null),
         },
         laps: {
-          $get: overrides.api?.races?.[":id"]?.laps?.$get ?? mockJSONRequest([]),
+          $get: overrides.races?.[":id"]?.laps?.$get ?? mockJSONRequest([]),
         },
         devices: {
           $get:
-            overrides.api?.races?.[":id"]?.devices?.$get ?? mockJSONRequest([]),
+            overrides.races?.[":id"]?.devices?.$get ?? mockJSONRequest([]),
         },
       },
     },
     runners: {
       scan: {
-        $post: overrides.api?.runners?.scan?.$post ?? mockJSONRequest(null),
+        $post: overrides.runners?.scan?.$post ?? mockJSONRequest(null),
       },
     },
   } as unknown as ApiClient;
+}
 
+function testContext(overrides: AppContextOverrides): AppContextValue {
   return {
-    api,
+    api: testApi(overrides.api),
     scanner: overrides.scanner ?? noopScanner,
     // A fresh, in-memory (non-localStorage) engine by default so tests
     // are isolated from each other; pass `offline` explicitly to seed a

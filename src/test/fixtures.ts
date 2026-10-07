@@ -48,6 +48,8 @@ export function uuid(id: number) {
 export const jsonResponse = (json: unknown) =>
   new Response(JSON.stringify(json));
 
+// A fresh Response per call - a body can only be read once, and a page may
+// hit the same endpoint from more than one component.
 export const mockJSONRequest = (result: unknown) => {
-  return vi.fn().mockResolvedValue(jsonResponse(result));
+  return vi.fn().mockImplementation(async () => jsonResponse(result));
 };
