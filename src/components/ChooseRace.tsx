@@ -10,11 +10,10 @@ import { context } from "@/context";
 import type { RaceData } from "@/api";
 import { CreateRace } from "@/components/CreateRace";
 
-const NEW_RACE = "__new__";
-
 export const ChooseRace: Component = () => {
   const { api, offline } = context();
   const [creating, setCreating] = createSignal(false);
+  let popover: HTMLUListElement | undefined;
 
   const [races, { mutate: setRaces }] = createResource(async () => {
     const res = await api.races.$get();
@@ -26,28 +25,18 @@ export const ChooseRace: Component = () => {
     return (await res.json()) as RaceData | null;
   });
 
-  const onSelectChange = (e: Event) => {
-    const target = e.currentTarget as HTMLSelectElement;
-    const id = target.value;
-    // The browser marks the clicked option as selected before this
-    // handler runs. "new" is an action, not a real choice, so the control
-    // must be put back to what's actually selected rather than left
-    // showing the click.
-    const revertSelection = () => (target.value = selected()?.id ?? "");
-
-    if (id === NEW_RACE) {
-      revertSelection();
-      setCreating(true);
-      return;
-    }
-    if (!id) return;
-    const race = races()?.find((r) => r.id === id);
-    if (!race) return;
+  const choose = (race: RaceData) => {
+    popover?.hidePopover();
     // Already a member (it's in this device's own races list) - this is a
     // pure selection, not a join, so it doesn't re-send membership.
     // Applies locally immediately, even offline.
     offline.selectRace(api, race);
     setSelected(race);
+  };
+
+  const startCreating = () => {
+    popover?.hidePopover();
+    setCreating(true);
   };
 
   const createProps = {
@@ -59,27 +48,49 @@ export const ChooseRace: Component = () => {
     },
   };
 
+  const trigger = (name: string, disabled = false) => (
+    <button
+      type="button"
+      class="race-trigger"
+      popovertarget="race-items"
+      aria-haspopup="menu"
+      disabled={disabled}
+    >
+      <span class="race-name">{name}</span>
+      <span aria-hidden="true">⌃</span>
+    </button>
+  );
+
   return (
     <div class="choose-race">
       <Show when={!creating()} fallback={<CreateRace {...createProps} />}>
-        <Suspense fallback={<select disabled />}>
-          <select onChange={onSelectChange}>
-            <option value="" selected={!selected()}>
-              Select a race
-            </option>
-            <optgroup label="Your races">
-              <For each={races()}>
-                {(race) => (
-                  <option value={race.id} selected={race.id === selected()?.id}>
+        <Suspense fallback={trigger("Select a race", true)}>
+          {trigger(selected()?.name ?? "Select a race")}
+          <ul
+            id="race-items"
+            class="popover-list"
+            popover
+            ref={(el) => (popover = el)}
+          >
+            <For each={races()}>
+              {(race) => (
+                <li>
+                  <button
+                    type="button"
+                    classList={{ active: race.id === selected()?.id }}
+                    onClick={() => choose(race)}
+                  >
                     {race.name}
-                  </option>
-                )}
-              </For>
-            </optgroup>
-            <optgroup label="Actions">
-              <option value={NEW_RACE}>➕ New</option>
-            </optgroup>
-          </select>
+                  </button>
+                </li>
+              )}
+            </For>
+            <li class="race-new">
+              <button type="button" onClick={startCreating}>
+                New race
+              </button>
+            </li>
+          </ul>
         </Suspense>
       </Show>
     </div>

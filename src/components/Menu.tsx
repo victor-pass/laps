@@ -37,7 +37,7 @@ export const Menu: Component = () => {
       <button type="button" popovertarget="menu-items" aria-haspopup="menu">
         ☰ {current()}
       </button>
-      <ul id="menu-items" popover ref={(el) => (menu = el)}>
+      <ul id="menu-items" class="popover-list" popover ref={(el) => (menu = el)}>
         <li class="menu-group">
           <span id="menu-group-scan">Scan</span>
           <ul aria-labelledby="menu-group-scan">
