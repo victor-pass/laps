@@ -1,18 +1,11 @@
 import { Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { context } from "@/context";
-import type { RaceData, RunnerData, ScanResult } from "@/api";
+import type { RaceData, ScanResult } from "@/api";
 import { ConfirmRace } from "./ConfirmRace";
 import { parseRaceId } from "@/qr";
 import { createScanDedupe } from "@/scanDedupe";
+import { runnerName } from "@/runner";
 import type { CameraFacing } from "@/scanner";
-
-function name({ info }: RunnerData): string | undefined {
-  if (typeof info === "string") return info;
-  if (info && typeof info === "object" && "name" in info) {
-    const { name } = info as { name: unknown };
-    if (typeof name === "string") return name;
-  }
-}
 
 export const Scan: Component<{ facing: CameraFacing }> = (props) => {
   const { api, scanner, offline, popup } = context();
@@ -62,9 +55,9 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
   const scanRunner = async (data: string) => {
     try {
       const result: ScanResult = await offline.scan(api, data);
-      const runnerName = name(result.runner);
+      const name = runnerName(result.runner.info);
       popup.set({
-        message: `Lap ${result.lapCount}${runnerName ? ` - ${runnerName}` : ""}`,
+        message: `Lap ${result.lapCount}${name ? ` - ${name}` : ""}`,
         type: "success",
       });
     } catch {

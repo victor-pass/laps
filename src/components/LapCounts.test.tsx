@@ -35,6 +35,37 @@ describe("LapCounts", () => {
     expect(lapCounts.filterValue).toStrictEqual("5");
   });
 
+  it("shows each runner by name", async () => {
+    const laps$get = mockJSONRequest([
+      testLap({ runner: "runner-1", info: "Bib 42" }),
+      testLap({ runner: "runner-2", info: { name: "Jamie" } }),
+      testLap({
+        runner: "runner-2",
+        info: { name: "Jamie" },
+        timestamp: "1970-01-01T00:01:00.000Z",
+      }),
+      testLap({ runner: "runner-3", info: { bib: 7 } }),
+    ]);
+
+    const views = loadViews(
+      render(() => (
+        <TestContext api={{ races: { ":id": { laps: { $get: laps$get } } } }}>
+          <LapCounts race={testRace({ id: uuid(1), lapFilterSeconds: 5 })} />
+        </TestContext>
+      )),
+    );
+
+    const lapCounts = await views.lapCounts();
+    // No usable name falls back to the runner's id, as before.
+    await waitFor(() =>
+      expect(lapCounts.items()).toStrictEqual([
+        { runner: "Jamie", count: 2 },
+        { runner: "Bib 42", count: 1 },
+        { runner: "runner-3", count: 1 },
+      ]),
+    );
+  });
+
   it("recomputes counts locally and instantly as the filter is edited", async () => {
     const laps$get = mockJSONRequest([
       testLap({ runner: "runner-1", timestamp: "2026-01-01T00:00:00.000Z" }),

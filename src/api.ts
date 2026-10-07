@@ -48,6 +48,9 @@ export type ApiEnv = {
 type Lap = typeof lap.$inferSelect;
 export interface LapData extends Omit<Lap, "timestamp"> {
   timestamp: string;
+  // The runner's scanned info, so lap lists can show a name without a
+  // separate lookup per runner.
+  info: unknown;
 }
 
 export interface RaceData {
@@ -96,8 +99,10 @@ export const createAPI = (loadDB: LoadDB) =>
           id: lap.id,
           runner: lap.runner,
           timestamp: lap.timestamp,
+          info: runner.info,
         })
         .from(lap)
+        .innerJoin(runner, eq(runner.ref, lap.runner))
         .where(eq(lap.race, id));
       return c.json(result);
     })

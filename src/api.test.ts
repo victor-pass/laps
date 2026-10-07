@@ -53,6 +53,7 @@ describe("races/:id/laps", () => {
         id: 1,
         runner: "00000000-0000-0000-0000-000000000001",
         timestamp: "2020-01-01T12:00:00.000Z",
+        info: { name: "tom" },
       },
     ]);
   });

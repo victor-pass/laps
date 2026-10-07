@@ -5,10 +5,10 @@ export class LapCountsView extends View {
   static selector = ".lap-counts";
 
   items() {
-    return this.$$("li").map((li) => {
-      const [runner, count] = li.textContent!.split(": ");
-      return { runner, count: Number(count) };
-    });
+    return this.$$("li").map((li) => ({
+      runner: li.querySelector(".runner")!.textContent,
+      count: Number(li.querySelector(".count")!.textContent),
+    }));
   }
 
   private get input() {

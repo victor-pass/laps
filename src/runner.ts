@@ -1,3 +1,13 @@
+// A runner's info is whatever their QR code held: plain text (used as-is)
+// or JSON with a `name`.
+export function runnerName(info: unknown): string | undefined {
+  if (typeof info === "string") return info;
+  if (info && typeof info === "object" && "name" in info) {
+    const { name } = info as { name: unknown };
+    if (typeof name === "string") return name;
+  }
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

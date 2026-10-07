@@ -2,6 +2,7 @@ import { Component, createResource, createSignal, For, Suspense } from "solid-js
 import { context } from "@/context";
 import type { LapData, RaceData } from "@/api";
 import { countByRunner } from "@/lapDedupe";
+import { runnerName } from "@/runner";
 
 interface Props {
   race: RaceData;
@@ -22,6 +23,9 @@ export const LapCounts: Component<Props> = (props) => {
       return (await res.json()) as LapData[];
     },
   );
+
+  const names = () =>
+    new Map((laps() ?? []).map((lap) => [lap.runner, runnerName(lap.info)]));
 
   const counts = () =>
     [...countByRunner(laps() ?? [], filterSeconds())].sort(
@@ -68,7 +72,8 @@ export const LapCounts: Component<Props> = (props) => {
           <For each={counts()}>
             {([runner, count]) => (
               <li>
-                {runner}: {count}
+                <span class="runner">{names().get(runner) ?? runner}</span>:{" "}
+                <span class="count">{count}</span>
               </li>
             )}
           </For>
