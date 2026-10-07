@@ -73,9 +73,6 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
       if (raceId) {
         await scanRace(raceId);
       } else if (scanDedupe.shouldProcess(trimmed)) {
-        // The camera decodes the same QR code on every frame it's in view,
-        // so without this a runner holding still for a second would queue
-        // a whole burst of laps instead of one.
         await scanRunner(trimmed);
       }
     } finally {
@@ -83,8 +80,23 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     }
   };
 
-  onMount(scan);
-  onCleanup(() => scanner.stop());
+  // Release the camera when hidden and start a fresh stream on return
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      scanner.stop();
+    } else if (!pendingRace()) {
+      resumeScanning();
+    }
+  };
+
+  onMount(() => {
+    scan();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+  });
+  onCleanup(() => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    scanner.stop();
+  });
 
   return (
     <div class="scan">

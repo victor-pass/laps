@@ -1,4 +1,4 @@
-import { expect, describe, it, vi } from "vitest";
+import { afterEach, expect, describe, it, vi } from "vitest";
 import { render } from "@solidjs/testing-library";
 import { Scan } from "./Scan";
 import { TestContext } from "@/test/TestContext";
@@ -18,7 +18,20 @@ function fakeScanner() {
   return { scanner, start, stop, decode: (text: string) => decode!(text) };
 }
 
+function setVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    get: () => state,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
 describe("Scan", () => {
+  afterEach(() => {
+    // Drop the instance override so the real prototype getter is used again.
+    delete (document as { visibilityState?: unknown }).visibilityState;
+  });
+
   it("records a lap for the scanned racer", async () => {
     const { scanner, decode } = fakeScanner();
     const $post = mockJSONRequest(null);
@@ -239,5 +252,67 @@ describe("Scan", () => {
     decode(raceQrData(uuid(9)));
     const popup = await views.popup();
     expect(popup.message()).toStrictEqual("Race not found");
+  });
+
+  it("stops the camera while hidden and restarts it when visible again", () => {
+    const { scanner, start, stop } = fakeScanner();
+
+    render(() => (
+      <TestContext scanner={scanner}>
+        <Scan facing="user" />
+      </TestContext>
+    ));
+    expect(start).toHaveBeenCalledTimes(1);
+
+    setVisibility("hidden");
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+
+    setVisibility("visible");
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(start).toHaveBeenLastCalledWith(
+      expect.any(HTMLVideoElement),
+      expect.any(Function),
+      "user",
+    );
+  });
+
+  it("stays paused on return while the race prompt is open", async () => {
+    const { scanner, start, decode } = fakeScanner();
+    const preview$get = mockJSONRequest(
+      testRace({ id: uuid(1), name: "Trail Run" }),
+    );
+
+    const views = loadViews(
+      render(() => (
+        <TestContext scanner={scanner} api={{ races: { ":id": { $get: preview$get } } }}>
+          <Scan facing="environment" />
+        </TestContext>
+      )),
+    );
+
+    decode(raceQrData(uuid(1)));
+    const confirmRace = await views.confirmRace();
+
+    setVisibility("hidden");
+    setVisibility("visible");
+    expect(start).toHaveBeenCalledTimes(1);
+
+    confirmRace.cancel();
+    expect(start).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops listening for visibility changes once unmounted", () => {
+    const { scanner, start } = fakeScanner();
+
+    const { unmount } = render(() => (
+      <TestContext scanner={scanner}>
+        <Scan facing="environment" />
+      </TestContext>
+    ));
+    unmount();
+
+    setVisibility("visible");
+    expect(start).toHaveBeenCalledTimes(1);
   });
 });
