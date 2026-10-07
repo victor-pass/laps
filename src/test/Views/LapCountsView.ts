@@ -29,4 +29,12 @@ export class LapCountsView extends View {
     fireEvent.input(this.input, { target: { value } });
     fireEvent.change(this.input, { target: { value } });
   }
+
+  get exportButton() {
+    return this.$(".export-laps") as HTMLButtonElement;
+  }
+
+  exportCsv() {
+    fireEvent.click(this.exportButton);
+  }
 }

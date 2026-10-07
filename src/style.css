@@ -7,7 +7,11 @@
     --text-muted-tint: #4f4f59aa;
     --border-color: #86afbe;
     --accent-color: #018fc0;
-    --dark-accent-color: color-mix(in srgb, var(--text-main), var(--accent-color));
+    --dark-accent-color: color-mix(
+        in srgb,
+        var(--text-main),
+        var(--accent-color)
+    );
     --accent-tint: #018fc02e;
     --delete-color: #d13f0b;
     --delete-hover: #fee2e2;
@@ -86,11 +90,15 @@ footer {
 }
 
 #menu-items {
-    inset: auto auto calc(var(--toolbar-clearance) / 2 + env(safe-area-inset-bottom, 0px)) var(--spacing-md);
+    inset: auto auto
+        calc(var(--toolbar-clearance) / 2 + env(safe-area-inset-bottom, 0px))
+        var(--spacing-md);
 }
 
 #race-items {
-    inset: auto var(--spacing-md) calc(var(--toolbar-clearance) / 2 + env(safe-area-inset-bottom, 0px)) auto;
+    inset: auto var(--spacing-md)
+        calc(var(--toolbar-clearance) / 2 + env(safe-area-inset-bottom, 0px))
+        auto;
     max-width: calc(100vw - 2 * var(--spacing-md));
     max-height: 60vh;
     overflow-y: auto;
@@ -158,7 +166,7 @@ footer {
     border: 1.5px solid var(--accent-color);
     border-radius: var(--pill-radius);
     color: var(--text-main);
-    background-color:var(--bg-transparent);
+    background-color: var(--bg-transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     padding: 0 0.9rem;
@@ -187,7 +195,7 @@ button {
 }
 
 button.cancel {
-    color: var(--bg-color)
+    color: var(--bg-color);
     background-color: var(--text-muted);
 }
 
@@ -329,6 +337,21 @@ main > *:not(.scan):not(.popups) {
     padding: 0;
 }
 
+.race-settings {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing-md) * 2);
+    margin-top: calc(var(--spacing-md) * 4);
+    padding: calc(var(--spacing-md) * 3);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+}
+
+.race-settings h2 {
+    margin: 0;
+    font-size: 1em;
+}
+
 .lap-filter {
     display: flex;
     align-items: center;
@@ -336,7 +359,10 @@ main > *:not(.scan):not(.popups) {
     gap: var(--spacing-sm);
     font-size: 0.85em;
     color: var(--text-muted);
-    margin-bottom: var(--spacing-sm);
+}
+
+.export-laps:disabled {
+    opacity: 0.5;
 }
 
 .lap-filter input {

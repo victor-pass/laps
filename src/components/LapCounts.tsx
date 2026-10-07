@@ -1,8 +1,15 @@
-import { Component, createResource, createSignal, For, Suspense } from "solid-js";
+import {
+  Component,
+  createResource,
+  createSignal,
+  For,
+  Suspense,
+} from "solid-js";
 import { context } from "@/context";
 import type { LapData, RaceData } from "@/api";
 import { countByRunner } from "@/lapDedupe";
 import { runnerName } from "@/runner";
+import { lapsCsv, lapsCsvFilename } from "@/lapsCsv";
 
 interface Props {
   race: RaceData;
@@ -54,19 +61,18 @@ export const LapCounts: Component<Props> = (props) => {
     offline.setLapFilter(api, props.race, value);
   };
 
+  const exportCsv = () => {
+    const blob = new Blob([lapsCsv(laps() ?? [])], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = lapsCsvFilename(props.race.name);
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div class="lap-counts">
-      <label class="lap-filter">
-        Minimum seconds between counted laps
-        <input
-          type="number"
-          min="0"
-          step="1"
-          value={filterSeconds()}
-          onInput={onFilterInput}
-          onChange={onFilterChange}
-        />
-      </label>
       <Suspense fallback={<p>Loading laps...</p>}>
         <ul>
           <For each={counts()}>
@@ -79,6 +85,28 @@ export const LapCounts: Component<Props> = (props) => {
           </For>
         </ul>
       </Suspense>
+      <section class="race-settings">
+        <h2>Race settings</h2>
+        <label class="lap-filter">
+          Minimum seconds between counted laps
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={filterSeconds()}
+            onInput={onFilterInput}
+            onChange={onFilterChange}
+          />
+        </label>
+        <button
+          type="button"
+          class="export-laps"
+          disabled={!laps()?.length}
+          onClick={exportCsv}
+        >
+          Export laps (CSV)
+        </button>
+      </section>
     </div>
   );
 };

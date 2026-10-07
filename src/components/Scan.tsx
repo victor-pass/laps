@@ -89,14 +89,16 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     }
   };
 
+  // The listener's cleanup is registered inside onMount because onCleanup
+  // also runs during SSR, where `document` doesn't exist.
   onMount(() => {
     scan();
     document.addEventListener("visibilitychange", onVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener("visibilitychange", onVisibilityChange),
+    );
   });
-  onCleanup(() => {
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-    scanner.stop();
-  });
+  onCleanup(() => scanner.stop());
 
   return (
     <div class="scan">

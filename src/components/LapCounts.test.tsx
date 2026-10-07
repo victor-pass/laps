@@ -1,4 +1,4 @@
-import { expect, describe, it } from "vitest";
+import { afterEach, expect, describe, it, vi } from "vitest";
 import { render, waitFor } from "@solidjs/testing-library";
 import { LapCounts } from "./LapCounts";
 import { TestContext } from "@/test/TestContext";
@@ -118,5 +118,61 @@ describe("LapCounts", () => {
         json: { lapFilterSeconds: 8 },
       }),
     );
+  });
+
+  describe("export", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("downloads every raw lap as a csv named after the race", async () => {
+      const createObjectURL = vi
+        .spyOn(URL, "createObjectURL")
+        .mockReturnValue("blob:laps");
+      vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+      const click = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(() => {});
+      const laps$get = mockJSONRequest([
+        testLap({ runner: "runner-1", timestamp: "2026-01-01T00:00:00.000Z", info: "Bib 42" }),
+        testLap({ runner: "runner-1", timestamp: "2026-01-01T00:00:03.000Z", info: "Bib 42" }),
+      ]);
+
+      const views = loadViews(
+        render(() => (
+          <TestContext api={{ races: { ":id": { laps: { $get: laps$get } } } }}>
+            <LapCounts race={testRace({ name: "Spring 5k", lapFilterSeconds: 5 })} />
+          </TestContext>
+        )),
+      );
+
+      const lapCounts = await views.lapCounts();
+      await waitFor(() => expect(lapCounts.exportButton.disabled).toBe(false));
+      lapCounts.exportCsv();
+
+      const link = click.mock.contexts[0] as HTMLAnchorElement;
+      expect(link.download).toStrictEqual("spring-5k-laps.csv");
+      expect(link.href).toStrictEqual("blob:laps");
+      const blob = createObjectURL.mock.calls[0][0] as Blob;
+      // Both laps, even though the 5s filter collapses them into one count.
+      expect(await blob.text()).toStrictEqual(
+        [
+          "timestamp,runner_id,runner_name",
+          "2026-01-01T00:00:00.000Z,runner-1,Bib 42",
+          "2026-01-01T00:00:03.000Z,runner-1,Bib 42",
+        ].join("\r\n"),
+      );
+    });
+
+    it("is disabled when there are no laps", async () => {
+      const views = loadViews(
+        render(() => (
+          <TestContext api={{ races: { ":id": { laps: { $get: mockJSONRequest([]) } } } }}>
+            <LapCounts race={testRace()} />
+          </TestContext>
+        )),
+      );
+
+      const lapCounts = await views.lapCounts();
+      expect(lapCounts.exportButton.disabled).toBe(true);
+    });
   });
 });
