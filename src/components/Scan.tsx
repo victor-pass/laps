@@ -20,11 +20,10 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
   }
 
   function scan() {
-    popup.set(undefined);
     if (video) {
       resumeScanning();
     } else {
-      popup.set({ message: "Unable to access camera", type: "error" });
+      popup.push({ message: "Unable to access camera", type: "error" });
     }
   }
 
@@ -34,7 +33,7 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
       scanner.stop();
       setPendingRace(race);
     } catch {
-      popup.set({ message: "Race not found", type: "error" });
+      popup.push({ message: "Race not found", type: "error" });
     }
   };
 
@@ -48,7 +47,7 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     if (!race) return;
     setPendingRace(undefined);
     offline.joinRace(api, race);
-    popup.set({ message: `Joined ${race.name}`, type: "success" });
+    popup.push({ message: `Joined ${race.name}`, type: "success" });
     resumeScanning();
   };
 
@@ -56,12 +55,12 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     try {
       const result: ScanResult = await offline.scan(api, data);
       const name = runnerName(result.runner.info);
-      popup.set({
+      popup.push({
         message: `Lap ${result.lapCount}${name ? ` - ${name}` : ""}`,
         type: "success",
       });
     } catch {
-      popup.set({ message: "Unable to record lap, try again", type: "error" });
+      popup.push({ message: "Unable to record lap, try again", type: "error" });
     }
   };
 

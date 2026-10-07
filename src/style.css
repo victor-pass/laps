@@ -250,7 +250,7 @@ main {
     overflow-y: auto;
 }
 
-main > *:not(.scan):not(.popup) {
+main > *:not(.scan):not(.popups) {
     margin: 0;
     padding: var(--spacing-md);
     padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
@@ -269,18 +269,38 @@ main > *:not(.scan):not(.popup) {
     display: block;
 }
 
-.popup,
+.popups,
 .scan .confirm-race {
     position: absolute;
-    text-align: center;
     left: var(--spacing-md);
     right: var(--spacing-md);
     bottom: calc(var(--spacing-md) + var(--toolbar-clearance));
+}
+
+/* Stacked bottom-up: the newest popup sits nearest the toolbar and older ones
+   are pushed up above it. Clicks pass through the gaps to the page below. */
+.popups {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    max-height: calc(100% - var(--toolbar-clearance) - 2 * var(--spacing-md));
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.popup,
+.scan .confirm-race {
+    text-align: center;
     margin: 0;
     padding: var(--spacing-md);
     border-radius: var(--border-radius);
     background-color: var(--card-bg);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.popup {
+    flex-shrink: 0;
 }
 
 .scan .confirm-race {

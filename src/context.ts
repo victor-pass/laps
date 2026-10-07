@@ -2,15 +2,13 @@ import { createContext, useContext } from "solid-js";
 import type { ApiClient } from "@/api";
 import type { QrScanner } from "@/scanner";
 import type { OfflineEngine } from "@/offline";
-import { PopupParams } from "./components/Popup";
+import { type PopupService } from "./components/Popup";
 
 export interface AppContextValue {
   api: ApiClient;
   scanner: QrScanner;
   offline: OfflineEngine;
-  popup: {
-    set: (message?: PopupParams) => void;
-  };
+  popup: PopupService;
 }
 
 export const AppContext = createContext<AppContextValue>();

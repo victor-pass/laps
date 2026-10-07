@@ -4,15 +4,9 @@ import { AppContext, AppContextValue } from "@/context";
 import { ApiClient } from "@/api";
 import { QrScanner, noopScanner } from "@/scanner";
 import { OfflineEngine, createOfflineEngine, emptyState } from "@/offline";
-import {
-  Accessor,
-  createSignal,
-  Show,
-  splitProps,
-  ParentComponent,
-} from "solid-js";
+import { splitProps, ParentComponent } from "solid-js";
 import { mockJSONRequest } from "./fixtures";
-import { Popup, PopupParams } from "@/components/Popup";
+import { Popups, createPopupService, PopupService } from "@/components/Popup";
 
 type MockedApi<T> = { [K in keyof T]?: Mock };
 
@@ -34,14 +28,10 @@ export type AppContextOverrides = {
   api?: ApiOverrides;
   scanner?: QrScanner;
   offline?: OfflineEngine;
-  popup?: {
-    set: (message?: PopupParams) => void;
-  };
+  popup?: PopupService;
 };
 
-function testContext(
-  overrides: AppContextOverrides,
-): [AppContextValue, Accessor<PopupParams | undefined>] {
+function testContext(overrides: AppContextOverrides): AppContextValue {
   const api = {
     races: {
       $get: overrides.api?.races?.$get ?? mockJSONRequest([]),
@@ -73,33 +63,25 @@ function testContext(
     },
   } as unknown as ApiClient;
 
-  const [getPopup, setPopup] = createSignal<PopupParams>();
-  const popup = {
-    set: (message?: PopupParams) => setPopup(message),
+  return {
+    api,
+    scanner: overrides.scanner ?? noopScanner,
+    // A fresh, in-memory (non-localStorage) engine by default so tests
+    // are isolated from each other; pass `offline` explicitly to seed a
+    // selected race or assert on queued/synced state.
+    offline: overrides.offline ?? createOfflineEngine(emptyState()),
+    popup: overrides.popup ?? createPopupService(),
   };
-
-  return [
-    {
-      api,
-      scanner: overrides.scanner ?? noopScanner,
-      // A fresh, in-memory (non-localStorage) engine by default so tests
-      // are isolated from each other; pass `offline` explicitly to seed a
-      // selected race or assert on queued/synced state.
-      offline: overrides.offline ?? createOfflineEngine(emptyState()),
-      popup,
-    },
-    getPopup,
-  ];
 }
 
 export const TestContext: ParentComponent<AppContextOverrides> = (props) => {
   const [_, overrides] = splitProps(props, ["children"]);
-  const [context, popup] = testContext(overrides);
+  const context = testContext(overrides);
 
   return (
     <AppContext.Provider value={context}>
       {props.children}
-      <Show when={popup()}>{(message) => <Popup {...message()} />}</Show>
+      <Popups />
     </AppContext.Provider>
   );
 };
