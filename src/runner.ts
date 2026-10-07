@@ -1,16 +1,8 @@
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Fixed namespace for hashing arbitrary racer QR data into a stable v5 uuid.
 const NAMESPACE = "b1a7f3d0-6e3a-4c8f-9b1a-2f6d4c9a7e11";
 
-/**
- * Converts whatever a racer's QR code encodes into a consistent uuid, so the
- * scanner stays agnostic to the QR format. A code that already scans as a
- * uuid (e.g. a pre-provisioned runner chip) is used as-is; anything else is
- * hashed deterministically so the same scanned data always maps to the same
- * runner.
- */
 export async function runnerRef(qrData: string): Promise<string> {
   const trimmed = qrData.trim();
   if (UUID_RE.test(trimmed)) return trimmed.toLowerCase();
