@@ -28,6 +28,11 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 }
 
 hydrate(
-  () => <App api={api} scanner={browserScanner} offline={offline} />,
+  () => <App
+      api={api}
+      scanner={browserScanner}
+      offline={offline}
+      deviceId={deviceId}
+    />,
   document.getElementById("root")!,
 );

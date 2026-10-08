@@ -29,6 +29,7 @@ export type AppContextOverrides = {
   scanner?: QrScanner;
   offline?: OfflineEngine;
   popup?: PopupService;
+  deviceId?: string;
 };
 
 export function testApi(overrides: ApiOverrides = {}): ApiClient {
@@ -73,6 +74,7 @@ function testContext(overrides: AppContextOverrides): AppContextValue {
     // selected race or assert on queued/synced state.
     offline: overrides.offline ?? createOfflineEngine(emptyState()),
     popup: overrides.popup ?? createPopupService(),
+    deviceId: overrides.deviceId,
   };
 }
 

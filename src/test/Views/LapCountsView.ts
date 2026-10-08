@@ -4,11 +4,18 @@ import { fireEvent } from "@solidjs/testing-library";
 export class LapCountsView extends View {
   static selector = ".lap-counts";
 
+  // `name` is "—" for runners with no name; `id` is the full runner id
+  // (the cell itself shows a shortened one).
   items() {
-    return this.$$("li").map((li) => ({
-      runner: li.querySelector(".runner")!.textContent,
-      count: Number(li.querySelector(".count")!.textContent),
+    return this.$$("tr.runner-row").map((row) => ({
+      name: row.querySelector(".name")!.textContent,
+      id: row.querySelector(".id")!.getAttribute("title"),
+      count: Number(row.querySelector(".count")!.textContent),
     }));
+  }
+
+  get headers() {
+    return this.$$("th").map((th) => th.textContent);
   }
 
   private get input() {

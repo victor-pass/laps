@@ -7,7 +7,15 @@ export class DevicesView extends View {
     return this.$(".devices-count")?.textContent;
   }
 
+  get thisDevice() {
+    return this.$(".this-device strong")?.textContent;
+  }
+
   items() {
-    return this.$$("li").map((li) => li.textContent);
+    return this.$$("tbody tr").map((row) => ({
+      name: row.querySelector(".device-name")!.firstChild!.textContent,
+      user: row.querySelector(".device-user")!.textContent,
+      current: row.classList.contains("current"),
+    }));
   }
 }

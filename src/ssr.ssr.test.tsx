@@ -92,8 +92,12 @@ describe("server rendering", () => {
       const visible = text(html);
       expect(visible).toContain("☰ Summary");
       expect(visible).toContain("1 device reporting");
-      expect(visible).toContain("Finish line - last seen");
-      expect(visible).toContain("Jamie : 1");
+      expect(visible).toContain("Device User Last seen");
+      expect(visible).toContain("Finish line dev");
+      expect(visible).toContain("Name Runner ID Laps");
+      expect(visible).toContain("Jamie runner-1 1");
+      // Only the browser knows which device it is.
+      expect(visible).not.toContain("This device");
       expect(visible).toContain("Minimum seconds between counted laps");
       expect(visible).toContain("Export laps (CSV)");
     });

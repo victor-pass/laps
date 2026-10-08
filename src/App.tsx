@@ -15,6 +15,7 @@ interface AppProps {
   api: ApiClient;
   scanner: QrScanner;
   offline: OfflineEngine;
+  deviceId?: string;
   url?: string;
 }
 
@@ -32,7 +33,12 @@ const Layout: Component<RouteSectionProps> = (props) => (
 );
 
 export const App: Component<AppProps> = (props) => {
-  const [context, _] = splitProps(props, ["api", "scanner", "offline"]);
+  const [context, _] = splitProps(props, [
+    "api",
+    "scanner",
+    "offline",
+    "deviceId",
+  ]);
   const popup = createPopupService();
 
   return (

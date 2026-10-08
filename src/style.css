@@ -331,12 +331,6 @@ main > *:not(.scan):not(.popups) {
     color: var(--e);
 }
 
-.lap-counts ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-}
-
 .race-settings {
     display: flex;
     flex-direction: column;
@@ -370,18 +364,89 @@ main > *:not(.scan):not(.popups) {
 }
 
 .devices {
-    margin-bottom: var(--spacing-md);
+    margin-bottom: calc(var(--spacing-md) * 4);
+}
+
+.this-device {
+    margin: 0 0 var(--spacing-md);
 }
 
 .devices-count {
     font-weight: 600;
-    margin: 0 0 var(--spacing-sm);
+    margin: 0 0 var(--spacing-md);
 }
 
-.devices ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+/* Spreadsheet-style table: header row, ruled cells, striped rows. */
+.sheet {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: auto;
+    font-size: 0.9em;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    font-variant-numeric: tabular-nums;
+}
+
+.sheet th,
+.sheet td {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+}
+
+.sheet th {
+    position: sticky;
+    top: 0;
+    background-color: var(--label-bg);
     color: var(--text-muted);
-    font-size: 0.85em;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sheet tbody tr:nth-child(even) {
+    background-color: var(--accent-tint);
+}
+
+.sheet .num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.sheet .id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.sheet .count {
+    font-weight: 600;
+}
+
+.sheet .unnamed,
+.sheet .empty {
+    color: var(--text-muted);
+}
+
+.sheet .empty {
+    text-align: center;
+}
+
+.sheet tr.current {
+    background-color: var(--accent-tint);
+    font-weight: 600;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0 0.4em;
+    border-radius: var(--pill-radius);
+    background-color: var(--accent-color);
+    color: var(--card-bg);
+    font-size: 0.75em;
+    font-weight: 600;
+    vertical-align: middle;
 }

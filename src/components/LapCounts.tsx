@@ -34,9 +34,14 @@ export const LapCounts: Component<Props> = (props) => {
   const names = () =>
     new Map((laps() ?? []).map((lap) => [lap.runner, runnerName(lap.info)]));
 
+  // Most laps first; ties by name, with unnamed runners after named ones.
   const counts = () =>
     [...countByRunner(laps() ?? [], filterSeconds())].sort(
-      ([, a], [, b]) => b - a,
+      ([ra, a], [rb, b]) =>
+        b - a ||
+        (names().get(ra) ?? "\uffff").localeCompare(
+          names().get(rb) ?? "\uffff",
+        ),
     );
 
   const parseFilterInput = (e: Event) => {
@@ -74,16 +79,41 @@ export const LapCounts: Component<Props> = (props) => {
   return (
     <div class="lap-counts">
       <Suspense fallback={<p>Loading laps...</p>}>
-        <ul>
-          <For each={counts()}>
-            {([runner, count]) => (
-              <li>
-                <span class="runner">{names().get(runner) ?? runner}</span>:{" "}
-                <span class="count">{count}</span>
-              </li>
-            )}
-          </For>
-        </ul>
+        <table class="sheet">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Runner ID</th>
+              <th scope="col" class="num">
+                Laps
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <For
+              each={counts()}
+              fallback={
+                <tr>
+                  <td class="empty" colspan="3">
+                    No laps yet
+                  </td>
+                </tr>
+              }
+            >
+              {([runner, count]) => (
+                <tr class="runner-row">
+                  <td class="name">
+                    {names().get(runner) ?? <span class="unnamed">—</span>}
+                  </td>
+                  <td class="id" title={runner}>
+                    {runner.slice(0, 8)}
+                  </td>
+                  <td class="num count">{count}</td>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
       </Suspense>
       <section class="race-settings">
         <h2>Race settings</h2>

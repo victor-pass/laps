@@ -39,7 +39,7 @@ describe("Summary", () => {
     });
     await waitFor(() =>
       expect(lapCounts.items()).toStrictEqual([
-        { runner: "runner-1", count: 1 },
+        { name: "—", id: "runner-1", count: 1 },
       ]),
     );
   });
