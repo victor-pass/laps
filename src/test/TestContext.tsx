@@ -1,4 +1,4 @@
-import { Mock } from "vitest";
+import { Mock, vi } from "vitest";
 
 import { AppContext, AppContextValue } from "@/context";
 import { ApiClient } from "@/api";
@@ -48,15 +48,13 @@ export function testApi(overrides: ApiOverrides = {}): ApiClient {
         $get: overrides.races?.[":id"]?.$get ?? mockJSONRequest(null),
         $patch: overrides.races?.[":id"]?.$patch ?? mockJSONRequest(null),
         join: {
-          $post:
-            overrides.races?.[":id"]?.join?.$post ?? mockJSONRequest(null),
+          $post: overrides.races?.[":id"]?.join?.$post ?? mockJSONRequest(null),
         },
         laps: {
           $get: overrides.races?.[":id"]?.laps?.$get ?? mockJSONRequest([]),
         },
         devices: {
-          $get:
-            overrides.races?.[":id"]?.devices?.$get ?? mockJSONRequest([]),
+          $get: overrides.races?.[":id"]?.devices?.$get ?? mockJSONRequest([]),
         },
       },
     },
@@ -68,13 +66,30 @@ export function testApi(overrides: ApiOverrides = {}): ApiClient {
   } as unknown as ApiClient;
 }
 
+export function offlineApi(): ApiOverrides {
+  const unreachable = () =>
+    vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+  return {
+    races: {
+      $get: unreachable(),
+      $post: unreachable(),
+      selected: { $get: unreachable(), $put: unreachable() },
+      ":id": {
+        $get: unreachable(),
+        $patch: unreachable(),
+        join: { $post: unreachable() },
+        laps: { $get: unreachable() },
+        devices: { $get: unreachable() },
+      },
+    },
+    runners: { scan: { $post: unreachable() } },
+  };
+}
+
 function testContext(overrides: AppContextOverrides): AppContextValue {
   return {
     api: testApi(overrides.api),
     scanner: overrides.scanner ?? noopScanner,
-    // A fresh, in-memory (non-localStorage) engine by default so tests
-    // are isolated from each other; pass `offline` explicitly to seed a
-    // selected race or assert on queued/synced state.
     offline: overrides.offline ?? createOfflineEngine(emptyState()),
     popup: overrides.popup ?? createPopupService(),
     deviceId: overrides.deviceId,

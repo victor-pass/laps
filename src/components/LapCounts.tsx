@@ -26,8 +26,16 @@ export const LapCounts: Component<Props> = (props) => {
   const [laps] = createResource(
     () => props.race.id,
     async (raceId) => {
-      const res = await api.races[":id"].laps.$get({ param: { id: raceId } });
-      return (await res.json()) as LapData[];
+      try {
+        const res = await api.races[":id"].laps.$get({ param: { id: raceId } });
+        return (await res.json()) as LapData[];
+      } catch {
+        // Offline with nothing cached by the service worker: this device's
+        // own laps. Runner names are only stored server-side.
+        return (offline.state().lapsByRace[raceId] ?? []).map(
+          (lap, i): LapData => ({ id: -1 - i, race: raceId, info: null, ...lap }),
+        );
+      }
     },
   );
 

@@ -18,7 +18,7 @@ describe("RaceQR", () => {
       )),
     );
 
-    const showRaceQr = await views.raceQR();
+    const showRaceQr = await views.raceQr();
     await waitFor(() => expect(showRaceQr.hasQrCode()).toBe(true));
   });
 
@@ -33,7 +33,7 @@ describe("RaceQR", () => {
       )),
     );
 
-    const showRaceQr = await views.raceQR();
+    const showRaceQr = await views.raceQr();
     await waitFor(async () => {
       const qrCodeValue = await showRaceQr.qrCodeValue();
       expect(qrCodeValue).toStrictEqual(

@@ -25,10 +25,14 @@ export const Devices: Component<Props> = (props) => {
   const [devices] = createResource(
     () => props.raceId,
     async (raceId) => {
-      const res = await api.races[":id"].devices.$get({
-        param: { id: raceId },
-      });
-      return (await res.json()) as DeviceData[];
+      try {
+        const res = await api.races[":id"].devices.$get({
+          param: { id: raceId },
+        });
+        return (await res.json()) as DeviceData[];
+      } catch {
+        return []; // offline - other devices' reports need the server
+      }
     },
   );
 

@@ -16,9 +16,15 @@ export const ChooseRace: Component = () => {
   const [creating, setCreating] = createSignal(false);
   let popover: HTMLUListElement | undefined;
 
+  // Empty when the server can't be reached - this device's own races are
+  // merged in below either way.
   const [serverRaces] = createResource(async () => {
-    const res = await api.races.$get();
-    return (await res.json()) as RaceData[];
+    try {
+      const res = await api.races.$get();
+      return (await res.json()) as RaceData[];
+    } catch {
+      return [];
+    }
   });
 
   const local = useDeviceState();

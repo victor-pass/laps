@@ -1,5 +1,5 @@
 import { App } from "@/App";
-import { hydrate } from "solid-js/web";
+import { hydrate, render } from "solid-js/web";
 import { ApiType } from "@/api";
 import { hc } from "hono/client";
 import { browserScanner } from "@/scanner";
@@ -27,13 +27,19 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
   });
 }
 
-hydrate(
-  () => <App
-      api={api}
-      scanner={browserScanner}
-      offline={offline}
-      deviceId={deviceId}
-      origin={window.location.origin}
-    />,
-  document.getElementById("root")!,
+const root = document.getElementById("root")!;
+const app = () => (
+  <App
+    api={api}
+    scanner={browserScanner}
+    offline={offline}
+    deviceId={deviceId}
+    origin={window.location.origin}
+  />
 );
+
+// A server-rendered page always has content to attach to; the offline app
+// shell's root is empty, so it's rendered from scratch for whatever address
+// was actually opened.
+if (root.hasChildNodes()) hydrate(app, root);
+else render(app, root);

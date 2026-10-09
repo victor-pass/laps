@@ -13,9 +13,15 @@ export function useDeviceState(): Accessor<LocalState | undefined> {
 export function useSelectedRace(): Accessor<RaceData | null | undefined> {
   const { api } = context();
   const device = useDeviceState();
+  // null when the server can't be reached (e.g. the offline app shell),
+  // leaving this device's own choice to fill in.
   const [server] = createResource(async () => {
-    const res = await api.races.selected.$get();
-    return (await res.json()) as RaceData | null;
+    try {
+      const res = await api.races.selected.$get();
+      return (await res.json()) as RaceData | null;
+    } catch {
+      return null;
+    }
   });
   return () => device()?.selectedRace ?? server();
 }

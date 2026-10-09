@@ -11,6 +11,7 @@ import { renderToStringAsync } from "solid-js/web";
 import { useAuthenticator, requireAuthPage } from "@/security";
 import { noopScanner } from "@/scanner";
 import { noopOfflineEngine } from "@/offline";
+import { APP_SHELL_PATH } from "../../pwa.config";
 
 const api = createAPI(neonDB);
 const apiProxy = createApiProxy(api);
@@ -43,6 +44,9 @@ const root = new Hono<{ Bindings: CloudflareBindings }>()
   .route("/", useAuthenticator(neonDB))
   .use(renderer)
   .get("/", (c) => c.redirect("/scanFront"))
+  // No login required: it holds no data, and the service worker fetches it
+  // while installing.
+  .get(APP_SHELL_PATH, (c) => c.render(<div id="root" />))
   .use("/scanFront", requireAuthPage)
   .get("/scanFront", renderPage)
   .use("/scanBack", requireAuthPage)
