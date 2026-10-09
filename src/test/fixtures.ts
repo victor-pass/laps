@@ -8,6 +8,8 @@ export function testLap(overrides: Partial<LapData> = {}): LapData {
     timestamp: "1970-01-01T00:00:00.000Z",
     race: uuid(1),
     info: null,
+    device: null,
+    deviceLabel: null,
     ...overrides,
   };
 }

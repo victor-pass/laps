@@ -1,5 +1,11 @@
 import { createSignal } from "solid-js";
-import type { ApiClient, LapData, RaceData, RunnerData, ScanResult } from "@/api";
+import type {
+  ApiClient,
+  LapData,
+  RaceData,
+  RunnerData,
+  ScanResult,
+} from "@/api";
 import { runnerRef } from "@/runner";
 import { collapseLaps, DEFAULT_LAP_FILTER_SECONDS } from "@/lapDedupe";
 import type { RaceLink } from "@/qr";
@@ -80,9 +86,20 @@ function save(data: Persisted) {
   }
 }
 
+export interface LocalScanResult extends ScanResult {
+  // False when the race's lap filter collapsed this scan into the runner's
+  // previous lap - it's still recorded, but the count didn't change.
+  counted: boolean;
+}
+
 export interface OfflineEngine {
   state(): LocalState;
   pendingCount(): number;
+  // Scans recorded on this device that the server doesn't have yet.
+  pendingLaps(): number;
+  // The last sync couldn't reach the server (no network, or a server error).
+  // Queued work is kept and retried.
+  unreachable(): boolean;
   // The server rejected this device's login (e.g. it expired). Queued work
   // is kept until the user signs in again.
   signedOut(): boolean;
@@ -91,7 +108,7 @@ export interface OfflineEngine {
   createRace(api: ApiClient, name: string): RaceData;
   selectRace(api: ApiClient, race: RaceData): void;
   setLapFilter(api: ApiClient, race: RaceData, seconds: number): void;
-  scan(api: ApiClient, data: string): Promise<ScanResult>;
+  scan(api: ApiClient, data: string): Promise<LocalScanResult>;
   drain(api: ApiClient): Promise<void>;
   resync(api: ApiClient): Promise<void>;
 }
@@ -116,6 +133,14 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   const [changed, notifyChanged] = createSignal(undefined, { equals: false });
 
   const [signedOut, setSignedOut] = createSignal(false);
+  const [unreachable, setUnreachable] = createSignal(false);
+
+  // What the latest sync learned about the connection, from each reply's
+  // status - undefined when the request never got a response at all.
+  function noteReplies(...statuses: (number | undefined)[]) {
+    setUnreachable(statuses.some((s) => s === undefined || s >= 500));
+    setSignedOut(statuses.includes(401));
+  }
 
   const persist = () => {
     notifyChanged();
@@ -181,18 +206,17 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     }
   }
 
-  async function requestOk(
-    response: Promise<{ ok: boolean; status: number }>,
-  ) {
+  async function requestOk(response: Promise<{ ok: boolean; status: number }>) {
     let ok: boolean, status: number;
     try {
       const res = await response;
       ok = res.ok;
       status = res.status;
     } catch {
+      noteReplies(undefined);
       throw new RetryLater();
     }
-    setSignedOut(status === 401);
+    noteReplies(status);
     if (ok) return;
     if (status >= 500 || status === 401) throw new RetryLater();
     // Any other 4xx means the request reached the server and was rejected
@@ -218,9 +242,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     const id = store.pendingSelect;
     if (id === undefined) return true;
     try {
-      await requestOk(
-        api.races.selected.$put({ json: { id } }),
-      );
+      await requestOk(api.races.selected.$put({ json: { id } }));
     } catch (e) {
       if (e instanceof RetryLater) return false;
       throw e;
@@ -272,11 +294,13 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   async function resync(api: ApiClient) {
     if (hasPendingWork()) return; // don't clobber unsynced local state
     try {
-      const [racesRes, selectedRes] = await Promise.all([
+      const replies = await Promise.all([
         api.races.$get(),
         api.races.selected.$get(),
-      ]);
-      setSignedOut(racesRes.status === 401 || selectedRes.status === 401);
+      ]).catch(() => undefined);
+      if (!replies) return noteReplies(undefined);
+      const [racesRes, selectedRes] = replies;
+      noteReplies(racesRes.status, selectedRes.status);
       if (!racesRes.ok || !selectedRes.ok) return;
       store.state.races = (await racesRes.json()) as RaceData[];
       store.state.selectedRace =
@@ -312,6 +336,11 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       (store.pendingSelect !== undefined ? 1 : 0) +
       (store.pendingLapFilter !== undefined ? 1 : 0),
 
+    pendingLaps: () => (
+      changed(),
+      store.queue.filter((a) => a.kind === "scan").length
+    ),
+    unreachable,
     signedOut,
     previewRace: (api, link) => previewRace(api, link, store.state.races),
 
@@ -345,7 +374,10 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
 
     setLapFilter(api, race, seconds) {
       if (store.state.selectedRace?.id === race.id) {
-        store.state.selectedRace = { ...store.state.selectedRace, lapFilterSeconds: seconds };
+        store.state.selectedRace = {
+          ...store.state.selectedRace,
+          lapFilterSeconds: seconds,
+        };
       }
       const known = store.state.races.find((r) => r.id === race.id);
       if (known) known.lapFilterSeconds = seconds;
@@ -360,10 +392,8 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
 
       const ref = await runnerRef(data);
       const timestamp = new Date().toISOString();
+      const before = countForRunner(race.id, ref, race.lapFilterSeconds);
       recordLocalLap(race.id, ref, timestamp);
-      // Recomputed (not incremented) after recording, so a scan that lands
-      // within the race's own filter window of the runner's last counted
-      // lap correctly doesn't bump the shown count.
       const lapCount = countForRunner(race.id, ref, race.lapFilterSeconds);
       store.queue.push({
         kind: "scan",
@@ -375,12 +405,8 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       persist();
       void drain(api);
 
-      // The server always stores/returns the raw scanned text as-is (see
-      // /runners/scan); this only affects the optimistic local popup, so a
-      // scan of a pre-provisioned runner with richer structured info still
-      // reads back correctly once the device syncs.
       const runnerData: RunnerData = { ref, info: parseInfo(data) };
-      return { runner: runnerData, race, lapCount };
+      return { runner: runnerData, race, lapCount, counted: lapCount > before };
     },
 
     drain,
@@ -388,22 +414,15 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   };
 }
 
-// The server's copy of a race when it can be reached. When it can't, falls
-// back to what this device already knows, then to the details carried in
-// the join link itself, so a volunteer can join and start scanning offline.
-// A race the server says doesn't exist is never faked from the link -
-// joining it would get dropped on sync, taking every lap queued behind it.
 export async function previewRace(
   api: ApiClient,
   link: RaceLink,
   known: RaceData[],
 ): Promise<RaceData> {
-  // undefined when offline - fall through to local details
   const res = await api.races[":id"]
     .$get({ param: { id: link.id } })
     .catch(() => undefined);
   if (res?.ok) return (await res.json()) as RaceData;
-  // Signed out says nothing about the race, so that's treated like offline.
   if (res && res.status < 500 && res.status !== 401)
     throw new Error("Race not found");
 
@@ -423,6 +442,8 @@ export async function previewRace(
 export const noopOfflineEngine: OfflineEngine = {
   state: () => ({ selectedRace: undefined, races: [], lapsByRace: {} }),
   pendingCount: () => 0,
+  pendingLaps: () => 0,
+  unreachable: () => false,
   signedOut: () => false,
   // Still fetches, so a server render of a join link shows the race.
   previewRace: (api, link) => previewRace(api, link, []),

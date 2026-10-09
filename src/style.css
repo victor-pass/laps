@@ -459,8 +459,9 @@ main > *:not(.scan):not(.popups) {
     vertical-align: middle;
 }
 
-/* Over every page, scan view included, until the user signs in again. */
-.signed-out {
+/* Over every page, scan view included, while laps aren't reaching the
+   server. */
+.sync-status {
     position: absolute;
     top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
     left: var(--spacing-md);
@@ -471,17 +472,23 @@ main > *:not(.scan):not(.popups) {
     gap: var(--spacing-md);
     padding: var(--spacing-md) calc(4 * var(--spacing-md));
     border-radius: var(--border-radius);
-    background-color: var(--error-bg);
-    color: var(--error-color);
+    background-color: var(--card-bg);
+    color: var(--text-main);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.signed-out p {
+/* Needs the user to act, unlike being offline, which clears by itself. */
+.sync-status.signed-out {
+    background-color: var(--error-bg);
+    color: var(--error-color);
+}
+
+.sync-status p {
     flex: 1;
     margin: 0;
 }
 
-.signed-out a {
+.sync-status a {
     color: inherit;
     font-weight: bold;
     white-space: nowrap;

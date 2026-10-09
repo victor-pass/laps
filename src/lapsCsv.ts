@@ -1,12 +1,31 @@
 import type { LapData } from "@/api";
 import { runnerName } from "@/runner";
+import { deviceNames } from "@/deviceName";
 
 // Every recorded lap, unfiltered by the race's lap filter, oldest first.
+// Includes the device that scanned each lap, so organizers can audit
+// discrepancies - named as the summary's device list names it.
 export function lapsCsv(laps: LapData[]): string {
+  const names = deviceNames([
+    ...new Set(laps.flatMap((lap) => (lap.device ? [lap.device] : []))),
+  ]);
   const rows = [...laps]
     .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
-    .map((lap) => [lap.timestamp, lap.runner, runnerName(lap.info) ?? ""]);
-  return [["timestamp", "runner_id", "runner_name"], ...rows]
+    .map((lap) => [
+      lap.timestamp,
+      lap.runner,
+      runnerName(lap.info) ?? "",
+      lap.device ?? "",
+      lap.deviceLabel ?? (lap.device ? names.get(lap.device)! : ""),
+    ]);
+  const header = [
+    "timestamp",
+    "runner_id",
+    "runner_name",
+    "device_id",
+    "device_name",
+  ];
+  return [header, ...rows]
     .map((row) => row.map(csvCell).join(","))
     .join("\r\n");
 }

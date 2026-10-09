@@ -139,6 +139,49 @@ describe("Scan", () => {
     expect($post).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a lap once, not again for re-scans the lap filter collapses", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const { scanner, decode } = fakeScanner();
+      const offline = createOfflineEngine({
+        ...emptyState(),
+        selectedRace: testRace({ lapFilterSeconds: 5 }),
+      });
+      const { container } = render(() => (
+        <TestContext
+          scanner={scanner}
+          offline={offline}
+          api={{ runners: { scan: { $post: mockJSONRequest(null) } } }}
+        >
+          <Scan facing="environment" />
+        </TestContext>
+      ));
+      const popups = () =>
+        [...container.querySelectorAll(".popup")].map((p) => p.textContent);
+      const scanAt = async (seconds: number, recorded: number) => {
+        vi.setSystemTime(new Date(Date.UTC(2026, 0, 1, 10, 0, seconds)));
+        decode("Bib 42");
+        await waitFor(() =>
+          expect(offline.state().lapsByRace[testRace().id]).toHaveLength(recorded),
+        );
+      };
+
+      await scanAt(0, 1);
+      // Past the camera's 1s burst filter, inside the race's 5s lap filter:
+      // recorded, but not a new lap.
+      await scanAt(2, 2);
+      await scanAt(4, 3);
+      expect(popups()).toEqual(["Lap 1 - Bib 42"]);
+
+      await scanAt(20, 4);
+      await waitFor(() =>
+        expect(popups()).toEqual(["Lap 1 - Bib 42", "Lap 2 - Bib 42"]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows an error when no race is selected", async () => {
     const { scanner, decode } = fakeScanner();
     const offline = createOfflineEngine(emptyState());

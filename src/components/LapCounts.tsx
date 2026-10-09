@@ -30,10 +30,19 @@ export const LapCounts: Component<Props> = (props) => {
         const res = await api.races[":id"].laps.$get({ param: { id: raceId } });
         return (await res.json()) as LapData[];
       } catch {
-        // Offline with nothing cached by the service worker: this device's
-        // own laps. Runner names are only stored server-side.
+        // Offline with nothing cached by the service worker: the laps this
+        // device knows about (the server's as of its last sync, plus its
+        // own scans since). Runner names and which device scanned each lap
+        // are only stored server-side.
         return (offline.state().lapsByRace[raceId] ?? []).map(
-          (lap, i): LapData => ({ id: -1 - i, race: raceId, info: null, ...lap }),
+          (lap, i): LapData => ({
+            id: -1 - i,
+            race: raceId,
+            info: null,
+            device: null,
+            deviceLabel: null,
+            ...lap,
+          }),
         );
       }
     },

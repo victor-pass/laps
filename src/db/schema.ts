@@ -34,6 +34,12 @@ export const lap = pgTable(
       .notNull()
       .references(() => race.id),
     timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),
+    // The device that scanned it, so organizers can audit lap data. Null
+    // for laps recorded before this was tracked, or from a client that
+    // didn't send an id. Deliberately not a foreign key: the device row is
+    // only upserted best-effort (see touchDevice), and a lap must never be
+    // rejected over it - a rejected scan is dropped from the sync queue.
+    device: uuid("device_id"),
   },
   (table) => [
     index("runner_ref_idx").on(table.runner),

@@ -11,7 +11,7 @@ import { ChooseRace } from "@/components/ChooseRace";
 import { Popups, createPopupService } from "@/components/Popup";
 import { Menu } from "@/components/Menu";
 import { JoinRace } from "@/components/JoinRace";
-import { SignedOut } from "@/components/SignedOut";
+import { SyncStatus } from "@/components/SyncStatus";
 
 interface AppProps {
   api: ApiClient;
@@ -32,7 +32,7 @@ const Layout: Component<RouteSectionProps> = (props) => (
       <Menu />
       <ChooseRace />
     </footer>
-    <SignedOut />
+    <SyncStatus />
   </>
 );
 

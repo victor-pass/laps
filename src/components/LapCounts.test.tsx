@@ -157,9 +157,9 @@ describe("LapCounts", () => {
       // Both laps, even though the 5s filter collapses them into one count.
       expect(await blob.text()).toStrictEqual(
         [
-          "timestamp,runner_id,runner_name",
-          "2026-01-01T00:00:00.000Z,runner-1,Bib 42",
-          "2026-01-01T00:00:03.000Z,runner-1,Bib 42",
+          "timestamp,runner_id,runner_name,device_id,device_name",
+          "2026-01-01T00:00:00.000Z,runner-1,Bib 42,,",
+          "2026-01-01T00:00:03.000Z,runner-1,Bib 42,,",
         ].join("\r\n"),
       );
     });

@@ -15,13 +15,21 @@ const UUID_RE =
 const DEVICE_HEADER = "x-device-id";
 const RACE_HEADER = "x-race-id";
 
+// The calling device's id, when it sent a well-formed one. Scans queued
+// offline are replayed by the same device that recorded them, so this is
+// always the device that actually scanned.
+const requestDeviceId = (c: Context) => {
+  const id = c.req.header(DEVICE_HEADER);
+  return id && UUID_RE.test(id) ? id : null;
+};
+
 // Records which device last talked to the server, and for which race, so
 // the summary view can show who's currently reporting. Piggybacks on every
 // authenticated request instead of a dedicated heartbeat endpoint. Never
 // blocks or fails the underlying request - tracing is best-effort.
 const touchDevice: MiddlewareHandler<ApiEnv> = async (c, next) => {
-  const deviceId = c.req.header(DEVICE_HEADER);
-  if (deviceId && UUID_RE.test(deviceId)) {
+  const deviceId = requestDeviceId(c);
+  if (deviceId) {
     const raceId = c.req.header(RACE_HEADER);
     const values = {
       id: deviceId,
@@ -51,6 +59,8 @@ export interface LapData extends Omit<Lap, "timestamp"> {
   // The runner's scanned info, so lap lists can show a name without a
   // separate lookup per runner.
   info: unknown;
+  // The scanning device's label, if it was given one.
+  deviceLabel: string | null;
 }
 
 export interface RaceData {
@@ -100,9 +110,12 @@ export const createAPI = (loadDB: LoadDB) =>
           runner: lap.runner,
           timestamp: lap.timestamp,
           info: runner.info,
+          device: lap.device,
+          deviceLabel: device.label,
         })
         .from(lap)
         .innerJoin(runner, eq(runner.ref, lap.runner))
+        .leftJoin(device, eq(device.id, lap.device))
         .where(eq(lap.race, id));
       return c.json(result);
     })
@@ -138,42 +151,38 @@ export const createAPI = (loadDB: LoadDB) =>
         .where(eq(userRace.user, authUser(c).sub));
       return c.json<RaceData[]>(rows);
     })
-    .post(
-      "/races",
-      jsonBody<{ name: string; id?: string }>(),
-      async (c) => {
-        const { name, id: clientId } = c.req.valid("json");
-        if (!name?.trim())
-          throw new HTTPException(400, { message: "name is required" });
+    .post("/races", jsonBody<{ name: string; id?: string }>(), async (c) => {
+      const { name, id: clientId } = c.req.valid("json");
+      if (!name?.trim())
+        throw new HTTPException(400, { message: "name is required" });
 
-        // A client generates its own id so it can create races while
-        // offline; onConflictDoNothing makes resending the same create
-        // (e.g. a synced retry) a no-op instead of an error. Creating
-        // grants membership but never touches the user's selected race -
-        // that's a distinct, coalesced choice made through
-        // PUT /races/selected.
-        const id = clientId ?? crypto.randomUUID();
-        await db(c).insert(race).values({ id, name }).onConflictDoNothing();
-        await db(c)
-          .insert(userRace)
-          .values({ user: authUser(c).sub, race: id })
-          .onConflictDoNothing();
+      // A client generates its own id so it can create races while
+      // offline; onConflictDoNothing makes resending the same create
+      // (e.g. a synced retry) a no-op instead of an error. Creating
+      // grants membership but never touches the user's selected race -
+      // that's a distinct, coalesced choice made through
+      // PUT /races/selected.
+      const id = clientId ?? crypto.randomUUID();
+      await db(c).insert(race).values({ id, name }).onConflictDoNothing();
+      await db(c)
+        .insert(userRace)
+        .values({ user: authUser(c).sub, race: id })
+        .onConflictDoNothing();
 
-        // Selected fresh rather than returned from the insert, since
-        // onConflictDoNothing means a resent create has no `.returning()`
-        // row of its own - this always reflects the race's current state.
-        const [created] = await db(c)
-          .select({
-            id: race.id,
-            name: race.name,
-            lapFilterSeconds: race.lapFilterSeconds,
-          })
-          .from(race)
-          .where(eq(race.id, id));
+      // Selected fresh rather than returned from the insert, since
+      // onConflictDoNothing means a resent create has no `.returning()`
+      // row of its own - this always reflects the race's current state.
+      const [created] = await db(c)
+        .select({
+          id: race.id,
+          name: race.name,
+          lapFilterSeconds: race.lapFilterSeconds,
+        })
+        .from(race)
+        .where(eq(race.id, id));
 
-        return c.json<RaceData>(created!);
-      },
-    )
+      return c.json<RaceData>(created!);
+    })
     .get("/races/selected", async (c) => {
       const [row] = await db(c)
         .select({
@@ -187,34 +196,26 @@ export const createAPI = (loadDB: LoadDB) =>
 
       return c.json<RaceData | null>(row ?? null);
     })
-    .put(
-      "/races/selected",
-      jsonBody<{ id: string }>(),
-      async (c) => {
-        const { id } = c.req.valid("json");
-        // Requires membership, not just existence - selecting a race you
-        // haven't joined would leave the summary/scan flow pointed at
-        // something you have no access to.
-        const [found] = await db(c)
-          .select({
-            id: race.id,
-            name: race.name,
-            lapFilterSeconds: race.lapFilterSeconds,
-          })
-          .from(userRace)
-          .innerJoin(race, eq(race.id, userRace.race))
-          .where(and(eq(userRace.user, authUser(c).sub), eq(userRace.race, id)));
-        if (!found)
-          throw new HTTPException(400, { message: "Race not joined" });
+    .put("/races/selected", jsonBody<{ id: string }>(), async (c) => {
+      const { id } = c.req.valid("json");
+      const [found] = await db(c)
+        .select({
+          id: race.id,
+          name: race.name,
+          lapFilterSeconds: race.lapFilterSeconds,
+        })
+        .from(userRace)
+        .innerJoin(race, eq(race.id, userRace.race))
+        .where(and(eq(userRace.user, authUser(c).sub), eq(userRace.race, id)));
+      if (!found) throw new HTTPException(400, { message: "Race not joined" });
 
-        await db(c)
-          .update(user)
-          .set({ selectedRace: id })
-          .where(eq(user.sub, authUser(c).sub));
+      await db(c)
+        .update(user)
+        .set({ selectedRace: id })
+        .where(eq(user.sub, authUser(c).sub));
 
-        return c.json<RaceData>(found);
-      },
-    )
+      return c.json<RaceData>(found);
+    })
     .get("/races/:id", async (c) => {
       const id = c.req.param("id");
       const [found] = await db(c)
@@ -288,12 +289,6 @@ export const createAPI = (loadDB: LoadDB) =>
         const scannedAt = new Date(timestamp);
         if (isNaN(scannedAt.getTime()))
           throw new HTTPException(400, { message: "timestamp is invalid" });
-
-        // The race is named explicitly by the client (rather than resolved
-        // from the user's server-side selected race) so a scan queued
-        // while offline still lands against the race it was actually
-        // scanned for, even if the device has since switched races
-        // locally.
         const [selected] = await db(c)
           .select({
             id: race.id,
@@ -303,10 +298,7 @@ export const createAPI = (loadDB: LoadDB) =>
           .from(userRace)
           .innerJoin(race, eq(race.id, userRace.race))
           .where(
-            and(
-              eq(userRace.user, authUser(c).sub),
-              eq(userRace.race, raceId),
-            ),
+            and(eq(userRace.user, authUser(c).sub), eq(userRace.race, raceId)),
           );
         if (!selected)
           throw new HTTPException(400, { message: "Race not joined" });
@@ -316,12 +308,15 @@ export const createAPI = (loadDB: LoadDB) =>
           .insert(runner)
           .values({ ref, info: data })
           .onConflictDoNothing();
-        // onConflictDoNothing makes resending the same scan (a synced
-        // retry after the device never saw the response) a no-op instead
-        // of double-counting the lap.
+
         await db(c)
           .insert(lap)
-          .values({ runner: ref, race: selected.id, timestamp: scannedAt })
+          .values({
+            runner: ref,
+            race: selected.id,
+            timestamp: scannedAt,
+            device: requestDeviceId(c),
+          })
           .onConflictDoNothing({
             target: [lap.runner, lap.race, lap.timestamp],
           });

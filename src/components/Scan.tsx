@@ -1,6 +1,6 @@
 import { Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { context } from "@/context";
-import type { RaceData, ScanResult } from "@/api";
+import type { RaceData } from "@/api";
 import { ConfirmRace } from "./ConfirmRace";
 import { parseRaceLink, type RaceLink } from "@/qr";
 import { createScanDedupe } from "@/scanDedupe";
@@ -53,7 +53,11 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
 
   const scanRunner = async (data: string) => {
     try {
-      const result: ScanResult = await offline.scan(api, data);
+      const result = await offline.scan(api, data);
+      // A re-scan inside the race's lap filter is still recorded, but it
+      // isn't a new lap - showing "Lap N" again would just stack a repeat
+      // of the popup already on screen.
+      if (!result.counted) return;
       const name = runnerName(result.runner.info);
       popup.push({
         message: `Lap ${result.lapCount}${name ? ` - ${name}` : ""}`,

@@ -1,0 +1,1 @@
+ALTER TABLE "lap" ADD COLUMN "device_id" uuid;

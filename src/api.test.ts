@@ -5,6 +5,8 @@ import { expect, describe, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { sign } from "hono/jwt";
 import { uuid } from "@/test/fixtures";
+import { device } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 const JWT_SECRET = randomBytes(32).toString("hex");
 
@@ -54,7 +56,48 @@ describe("races/:id/laps", () => {
         runner: "00000000-0000-0000-0000-000000000001",
         timestamp: "2020-01-01T12:00:00.000Z",
         info: { name: "tom" },
+        device: null,
+        deviceLabel: null,
       },
+    ]);
+  });
+
+  it("says which device scanned each lap, for auditing", async () => {
+    const { client, seed, db } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
+    });
+    const scan = async (timestamp: string, extra: Record<string, string>) =>
+      client.runners.scan.$post(
+        { json: { data: "bib:42", race: uuid(0), timestamp } },
+        await headers("user", extra),
+      );
+
+    await scan("2026-01-01T10:00:00.000Z", { "X-Device-Id": uuid(5) });
+    await scan("2026-01-01T10:10:00.000Z", { "X-Device-Id": uuid(6) });
+    await scan("2026-01-01T10:20:00.000Z", {}); // older client, no id
+    await scan("2026-01-01T10:30:00.000Z", { "X-Device-Id": "not-a-uuid" });
+    await db
+      .update(device)
+      .set({ label: "Finish line" })
+      .where(eq(device.id, uuid(5)));
+
+    const res = await client.races[":id"].laps.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    const laps = await res.json();
+    expect(
+      laps
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+        .map(({ device, deviceLabel }) => ({ device, deviceLabel })),
+    ).toEqual([
+      { device: uuid(5), deviceLabel: "Finish line" },
+      { device: uuid(6), deviceLabel: null },
+      { device: null, deviceLabel: null },
+      { device: null, deviceLabel: null },
     ]);
   });
 });
