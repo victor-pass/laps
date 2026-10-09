@@ -58,7 +58,58 @@ describe("races/:id/laps", () => {
         info: { name: "tom" },
         device: null,
         deviceLabel: null,
+        user: null,
+        userName: null,
       },
+    ]);
+  });
+
+  it("records the lap's device even when the best-effort device update fails", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
+    });
+
+    // The device reports a race the server doesn't have (e.g. since
+    // deleted), so touchDevice's upsert hits the race foreign key and is
+    // skipped - the scan itself must still be accepted and attributed.
+    const scan = await client.runners.scan.$post(
+      { json: { data: "bib:42", race: uuid(0), timestamp: "2026-01-01T10:00:00.000Z" } },
+      await headers("user", { "X-Device-Id": uuid(5), "X-Race-Id": uuid(9) }),
+    );
+    expect(scan.status).toBe(200);
+
+    const res = await client.races[":id"].laps.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    expect(await res.json()).toEqual([
+      expect.objectContaining({ device: uuid(5) }),
+    ]);
+  });
+
+  it("keeps a removed device's laps, without the device", async () => {
+    const { client, seed, db } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [{ sub: "user", name: "user" }],
+      userRace: [{ user: "user", race: uuid(0) }],
+    });
+    await client.runners.scan.$post(
+      { json: { data: "bib:42", race: uuid(0), timestamp: "2026-01-01T10:00:00.000Z" } },
+      await headers("user", { "X-Device-Id": uuid(5) }),
+    );
+
+    await db.delete(device).where(eq(device.id, uuid(5)));
+
+    const res = await client.races[":id"].laps.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    expect(await res.json()).toEqual([
+      expect.objectContaining({ runner: expect.any(String), device: null }),
     ]);
   });
 
@@ -66,7 +117,7 @@ describe("races/:id/laps", () => {
     const { client, seed, db } = await setup();
     await seed({
       race: [{ id: uuid(0), name: "Spring 5k" }],
-      user: [{ sub: "user", name: "user" }],
+      user: [{ sub: "user", name: "Stephen" }],
       userRace: [{ user: "user", race: uuid(0) }],
     });
     const scan = async (timestamp: string, extra: Record<string, string>) =>
@@ -92,12 +143,54 @@ describe("races/:id/laps", () => {
     expect(
       laps
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-        .map(({ device, deviceLabel }) => ({ device, deviceLabel })),
+        .map(({ device, deviceLabel, userName }) => ({
+          device,
+          deviceLabel,
+          userName,
+        })),
     ).toEqual([
-      { device: uuid(5), deviceLabel: "Finish line" },
-      { device: uuid(6), deviceLabel: null },
-      { device: null, deviceLabel: null },
-      { device: null, deviceLabel: null },
+      { device: uuid(5), deviceLabel: "Finish line", userName: "Stephen" },
+      { device: uuid(6), deviceLabel: null, userName: "Stephen" },
+      { device: null, deviceLabel: null, userName: "Stephen" },
+      { device: null, deviceLabel: null, userName: "Stephen" },
+    ]);
+  });
+
+  it("keeps who was signed in for each lap when a device changes hands", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      race: [{ id: uuid(0), name: "Spring 5k" }],
+      user: [
+        { sub: "jo", name: "Jo" },
+        { sub: "sam", name: "Sam" },
+      ],
+      userRace: [
+        { user: "jo", race: uuid(0) },
+        { user: "sam", race: uuid(0) },
+      ],
+    });
+    const scanAs = async (sub: string, timestamp: string) =>
+      client.runners.scan.$post(
+        { json: { data: "bib:42", race: uuid(0), timestamp } },
+        await headers(sub, { "X-Device-Id": uuid(5) }),
+      );
+
+    await scanAs("jo", "2026-01-01T10:00:00.000Z");
+    // Same phone, now signed in as someone else.
+    await scanAs("sam", "2026-01-01T10:10:00.000Z");
+
+    const res = await client.races[":id"].laps.$get(
+      { param: { id: uuid(0) } },
+      await headers("jo"),
+    );
+    const laps = await res.json();
+    expect(
+      laps
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+        .map(({ device, user, userName }) => ({ device, user, userName })),
+    ).toEqual([
+      { device: uuid(5), user: "jo", userName: "Jo" },
+      { device: uuid(5), user: "sam", userName: "Sam" },
     ]);
   });
 });

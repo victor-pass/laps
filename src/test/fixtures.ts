@@ -10,6 +10,8 @@ export function testLap(overrides: Partial<LapData> = {}): LapData {
     info: null,
     device: null,
     deviceLabel: null,
+    user: null,
+    userName: null,
     ...overrides,
   };
 }

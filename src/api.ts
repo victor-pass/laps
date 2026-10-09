@@ -61,6 +61,8 @@ export interface LapData extends Omit<Lap, "timestamp"> {
   info: unknown;
   // The scanning device's label, if it was given one.
   deviceLabel: string | null;
+  // The name of the user signed in when the lap reached the server.
+  userName: string | null;
 }
 
 export interface RaceData {
@@ -112,10 +114,13 @@ export const createAPI = (loadDB: LoadDB) =>
           info: runner.info,
           device: lap.device,
           deviceLabel: device.label,
+          user: lap.user,
+          userName: user.name,
         })
         .from(lap)
         .innerJoin(runner, eq(runner.ref, lap.runner))
         .leftJoin(device, eq(device.id, lap.device))
+        .leftJoin(user, eq(user.sub, lap.user))
         .where(eq(lap.race, id));
       return c.json(result);
     })
@@ -304,6 +309,15 @@ export const createAPI = (loadDB: LoadDB) =>
           throw new HTTPException(400, { message: "Race not joined" });
 
         const ref = await runnerRef(data);
+        const deviceId = requestDeviceId(c);
+        // touchDevice already tried, but only best-effort; the lap's device
+        // must exist. If this fails, the request errors and the scan stays
+        // queued on the device to retry - it's never dropped.
+        if (deviceId)
+          await db(c)
+            .insert(device)
+            .values({ id: deviceId, user: authUser(c).sub, lastSeen: new Date() })
+            .onConflictDoNothing();
         await db(c)
           .insert(runner)
           .values({ ref, info: data })
@@ -315,7 +329,8 @@ export const createAPI = (loadDB: LoadDB) =>
             runner: ref,
             race: selected.id,
             timestamp: scannedAt,
-            device: requestDeviceId(c),
+            device: deviceId,
+            user: authUser(c).sub,
           })
           .onConflictDoNothing({
             target: [lap.runner, lap.race, lap.timestamp],

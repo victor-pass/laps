@@ -95,13 +95,8 @@ export interface LocalScanResult extends ScanResult {
 export interface OfflineEngine {
   state(): LocalState;
   pendingCount(): number;
-  // Scans recorded on this device that the server doesn't have yet.
   pendingLaps(): number;
-  // The last sync couldn't reach the server (no network, or a server error).
-  // Queued work is kept and retried.
   unreachable(): boolean;
-  // The server rejected this device's login (e.g. it expired). Queued work
-  // is kept until the user signs in again.
   signedOut(): boolean;
   previewRace(api: ApiClient, link: RaceLink): Promise<RaceData>;
   joinRace(api: ApiClient, race: RaceData): void;

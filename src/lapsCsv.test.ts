@@ -12,46 +12,55 @@ describe("lapsCsv", () => {
     ]);
     expect(csv).toStrictEqual(
       [
-        "timestamp,runner_id,runner_name,device_id,device_name",
-        "2026-01-01T00:00:00.000Z,r1,Bib 42,,",
-        "2026-01-01T00:00:01.000Z,r1,Bib 42,,",
-        "2026-01-01T00:00:10.000Z,r2,Jamie,,",
+        "timestamp,runner_id,runner_name,device_id,device_name,user",
+        "2026-01-01T00:00:00.000Z,r1,Bib 42,,,",
+        "2026-01-01T00:00:01.000Z,r1,Bib 42,,,",
+        "2026-01-01T00:00:10.000Z,r2,Jamie,,,",
       ].join("\r\n"),
     );
   });
 
   it("leaves the name blank when the runner has none", () => {
     expect(lapsCsv([testLap({ runner: "r1", info: { bib: 7 } })])).toStrictEqual(
-      "timestamp,runner_id,runner_name,device_id,device_name\r\n1970-01-01T00:00:00.000Z,r1,,,",
+      "timestamp,runner_id,runner_name,device_id,device_name,user\r\n1970-01-01T00:00:00.000Z,r1,,,,",
     );
   });
 
   it("quotes names containing commas, quotes or newlines", () => {
     const csv = lapsCsv([testLap({ runner: "r1", info: 'Smith, "Jo"\nJr' })]);
     expect(csv.split("\r\n")[1]).toStrictEqual(
-      '1970-01-01T00:00:00.000Z,r1,"Smith, ""Jo""\nJr",,',
+      '1970-01-01T00:00:00.000Z,r1,"Smith, ""Jo""\nJr",,,',
     );
   });
 
   it("stops names from being read as spreadsheet formulas", () => {
     const csv = lapsCsv([testLap({ runner: "r1", info: "=1+1" })]);
-    expect(csv.split("\r\n")[1]).toStrictEqual("1970-01-01T00:00:00.000Z,r1,'=1+1,,");
+    expect(csv.split("\r\n")[1]).toStrictEqual("1970-01-01T00:00:00.000Z,r1,'=1+1,,,");
   });
 });
 
 describe("lapsCsv device columns", () => {
-  it("names the device that scanned each lap, preferring its label", () => {
+  it("names the device that scanned each lap, preferring its label, and its user", () => {
     const at = (s: number) => `2026-01-01T00:00:0${s}.000Z`;
     const csv = lapsCsv([
-      testLap({ runner: "r1", timestamp: at(0), device: uuid(5), deviceLabel: "Finish line" }),
+      testLap({ runner: "r1", timestamp: at(0), device: uuid(5), deviceLabel: "Finish line", userName: "Stephen" }),
       testLap({ runner: "r1", timestamp: at(1), device: uuid(6) }),
       testLap({ runner: "r1", timestamp: at(2) }),
     ]);
     expect(csv.split("\r\n").slice(1)).toStrictEqual([
-      `${at(0)},r1,,${uuid(5)},Finish line`,
-      `${at(1)},r1,,${uuid(6)},${deviceName(uuid(6))}`,
-      `${at(2)},r1,,,`,
+      `${at(0)},r1,,${uuid(5)},Finish line,Stephen`,
+      `${at(1)},r1,,${uuid(6)},${deviceName(uuid(6))},`,
+      `${at(2)},r1,,,,`,
     ]);
+  });
+
+  it("stops user names from being read as spreadsheet formulas", () => {
+    const csv = lapsCsv([
+      testLap({ runner: "r1", device: uuid(5), userName: "+Jo" }),
+    ]);
+    expect(csv.split("\r\n")[1]).toStrictEqual(
+      `1970-01-01T00:00:00.000Z,r1,,${uuid(5)},${deviceName(uuid(5))},'+Jo`,
+    );
   });
 
   it("stops device labels from being read as spreadsheet formulas", () => {
@@ -59,7 +68,7 @@ describe("lapsCsv device columns", () => {
       testLap({ runner: "r1", device: uuid(5), deviceLabel: "@SUM(A1)" }),
     ]);
     expect(csv.split("\r\n")[1]).toStrictEqual(
-      `1970-01-01T00:00:00.000Z,r1,,${uuid(5)},'@SUM(A1)`,
+      `1970-01-01T00:00:00.000Z,r1,,${uuid(5)},'@SUM(A1),`,
     );
   });
 });

@@ -32,8 +32,8 @@ export const LapCounts: Component<Props> = (props) => {
       } catch {
         // Offline with nothing cached by the service worker: the laps this
         // device knows about (the server's as of its last sync, plus its
-        // own scans since). Runner names and which device scanned each lap
-        // are only stored server-side.
+        // own scans since). Runner names, and the device and user behind each
+        // lap, are only stored server-side.
         return (offline.state().lapsByRace[raceId] ?? []).map(
           (lap, i): LapData => ({
             id: -1 - i,
@@ -41,6 +41,8 @@ export const LapCounts: Component<Props> = (props) => {
             info: null,
             device: null,
             deviceLabel: null,
+            user: null,
+            userName: null,
             ...lap,
           }),
         );

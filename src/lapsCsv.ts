@@ -3,8 +3,9 @@ import { runnerName } from "@/runner";
 import { deviceNames } from "@/deviceName";
 
 // Every recorded lap, unfiltered by the race's lap filter, oldest first.
-// Includes the device that scanned each lap, so organizers can audit
-// discrepancies - named as the summary's device list names it.
+// Includes the device that scanned each lap and who was signed in, so
+// organizers can audit discrepancies - devices named as the summary's
+// device list names them.
 export function lapsCsv(laps: LapData[]): string {
   const names = deviceNames([
     ...new Set(laps.flatMap((lap) => (lap.device ? [lap.device] : []))),
@@ -17,6 +18,7 @@ export function lapsCsv(laps: LapData[]): string {
       runnerName(lap.info) ?? "",
       lap.device ?? "",
       lap.deviceLabel ?? (lap.device ? names.get(lap.device)! : ""),
+      lap.userName ?? "",
     ]);
   const header = [
     "timestamp",
@@ -24,6 +26,7 @@ export function lapsCsv(laps: LapData[]): string {
     "runner_name",
     "device_id",
     "device_name",
+    "user",
   ];
   return [header, ...rows]
     .map((row) => row.map(csvCell).join(","))

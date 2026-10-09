@@ -264,6 +264,15 @@ main > *:not(.scan):not(.popups) {
     padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
 }
 
+/* Scrolling pages end with room for the floating navigation pills, so their
+   last content (e.g. Summary's export button) can always scroll clear of
+   them. The scan view sits under the pills on purpose and doesn't scroll. */
+main:not(:has(> .scan))::after {
+    content: "";
+    display: block;
+    height: calc(var(--toolbar-clearance) + env(safe-area-inset-bottom, 0px));
+}
+
 .scan {
     height: 100%;
     position: relative;
