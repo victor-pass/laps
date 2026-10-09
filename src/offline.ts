@@ -46,7 +46,9 @@ interface Persisted {
   pendingLapFilter?: PendingLapFilter;
 }
 
-class NetworkError extends Error {}
+// The request couldn't be delivered yet - no network, a server error, or
+// this device's login has expired - so it stays queued for the next sync.
+class RetryLater extends Error {}
 
 function parseInfo(data: string): unknown {
   try {
@@ -81,6 +83,9 @@ function save(data: Persisted) {
 export interface OfflineEngine {
   state(): LocalState;
   pendingCount(): number;
+  // The server rejected this device's login (e.g. it expired). Queued work
+  // is kept until the user signs in again.
+  signedOut(): boolean;
   previewRace(api: ApiClient, link: RaceLink): Promise<RaceData>;
   joinRace(api: ApiClient, race: RaceData): void;
   createRace(api: ApiClient, name: string): RaceData;
@@ -109,6 +114,8 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   // component that reads state() in a reactive scope (e.g. the race picker)
   // update when a race is joined or selected anywhere in the app.
   const [changed, notifyChanged] = createSignal(undefined, { equals: false });
+
+  const [signedOut, setSignedOut] = createSignal(false);
 
   const persist = () => {
     notifyChanged();
@@ -183,11 +190,12 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       ok = res.ok;
       status = res.status;
     } catch {
-      throw new NetworkError();
+      throw new RetryLater();
     }
+    setSignedOut(status === 401);
     if (ok) return;
-    if (status >= 500) throw new NetworkError();
-    // A 4xx here means the request reached the server and was rejected
+    if (status >= 500 || status === 401) throw new RetryLater();
+    // Any other 4xx means the request reached the server and was rejected
     // (e.g. malformed data) - it can never succeed by retrying, so drop it
     // rather than blocking everything queued behind it forever.
   }
@@ -197,7 +205,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       try {
         await requestOk(request(api, store.queue[0]));
       } catch (e) {
-        if (e instanceof NetworkError) return false;
+        if (e instanceof RetryLater) return false;
         throw e;
       }
       store.queue.shift();
@@ -214,7 +222,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
         api.races.selected.$put({ json: { id } }),
       );
     } catch (e) {
-      if (e instanceof NetworkError) return false;
+      if (e instanceof RetryLater) return false;
       throw e;
     }
     // Only clear if nothing newer arrived while this was in flight.
@@ -234,7 +242,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
         }),
       );
     } catch (e) {
-      if (e instanceof NetworkError) return false;
+      if (e instanceof RetryLater) return false;
       throw e;
     }
     if (
@@ -268,6 +276,8 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
         api.races.$get(),
         api.races.selected.$get(),
       ]);
+      setSignedOut(racesRes.status === 401 || selectedRes.status === 401);
+      if (!racesRes.ok || !selectedRes.ok) return;
       store.state.races = (await racesRes.json()) as RaceData[];
       store.state.selectedRace =
         ((await selectedRes.json()) as RaceData | null) ?? undefined;
@@ -298,10 +308,11 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       return store.state;
     },
     pendingCount: () =>
-      store.queue.length +
+      (changed(), store.queue.length) +
       (store.pendingSelect !== undefined ? 1 : 0) +
       (store.pendingLapFilter !== undefined ? 1 : 0),
 
+    signedOut,
     previewRace: (api, link) => previewRace(api, link, store.state.races),
 
     joinRace(api, race) {
@@ -392,7 +403,9 @@ export async function previewRace(
     .$get({ param: { id: link.id } })
     .catch(() => undefined);
   if (res?.ok) return (await res.json()) as RaceData;
-  if (res && res.status < 500) throw new Error("Race not found");
+  // Signed out says nothing about the race, so that's treated like offline.
+  if (res && res.status < 500 && res.status !== 401)
+    throw new Error("Race not found");
 
   const local = known.find((r) => r.id === link.id);
   if (local) return local;
@@ -410,6 +423,7 @@ export async function previewRace(
 export const noopOfflineEngine: OfflineEngine = {
   state: () => ({ selectedRace: undefined, races: [], lapsByRace: {} }),
   pendingCount: () => 0,
+  signedOut: () => false,
   // Still fetches, so a server render of a join link shows the race.
   previewRace: (api, link) => previewRace(api, link, []),
   joinRace: () => {},

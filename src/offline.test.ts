@@ -200,6 +200,90 @@ describe("offline engine", () => {
     expect(engine.pendingCount()).toBe(0);
   });
 
+  describe("when the login has expired", () => {
+    const signedOut = () =>
+      vi.fn().mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+
+    it("keeps queued scans instead of dropping them, and flags it", async () => {
+      const engine = createOfflineEngine(emptyState());
+      const expired = fakeApi({ join: signedOut(), scan: signedOut() });
+
+      engine.joinRace(expired, testRace());
+      await engine.scan(expired, "bib:1");
+      await engine.scan(expired, "bib:2");
+      await flush();
+
+      expect(engine.signedOut()).toBe(true);
+      // join + 2 scans + the startup selection
+      expect(engine.pendingCount()).toBe(4);
+    });
+
+    it("sends everything once signed back in, in order", async () => {
+      const engine = createOfflineEngine(emptyState());
+      const expired = fakeApi({ join: signedOut(), scan: signedOut() });
+      engine.joinRace(expired, testRace());
+      await engine.scan(expired, "bib:1");
+      await flush(); // let the rejected background sync finish
+
+      const join = mockJSONRequest(null);
+      const scan = mockJSONRequest(null);
+      await engine.drain(fakeApi({ join, scan }));
+
+      expect(engine.signedOut()).toBe(false);
+      expect(engine.pendingCount()).toBe(0);
+      expect(join).toHaveBeenCalledOnce();
+      expect(scan).toHaveBeenCalledWith({
+        json: expect.objectContaining({ data: "bib:1" }),
+      });
+      expect(join.mock.invocationCallOrder[0]).toBeLessThan(
+        scan.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it("keeps this device's races on resync instead of replacing them", async () => {
+      const race = testRace({ id: uuid(2), name: "Trail Run" });
+      const engine = createOfflineEngine({
+        ...emptyState(),
+        selectedRace: race,
+        races: [race],
+      });
+
+      await engine.resync(
+        fakeApi({ races: signedOut(), selected: signedOut() }),
+      );
+
+      expect(engine.signedOut()).toBe(true);
+      expect(engine.state().races).toEqual([race]);
+      expect(engine.state().selectedRace).toEqual(race);
+    });
+
+    it("previews a scanned race from its join link rather than calling it missing", async () => {
+      const engine = createOfflineEngine(emptyState());
+
+      const found = await engine.previewRace(fakeApi({ preview: signedOut() }), {
+        id: uuid(3),
+        name: "Trail Run",
+      });
+      expect(found).toMatchObject({ id: uuid(3), name: "Trail Run" });
+    });
+  });
+
+  it("keeps this device's races when the server errors on resync", async () => {
+    const race = testRace({ id: uuid(2) });
+    const engine = createOfflineEngine({ ...emptyState(), races: [race] });
+    await engine.resync(
+      fakeApi({
+        races: vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ message: "db down" }), { status: 500 }),
+        ),
+        selected: mockJSONRequest(null),
+      }),
+    );
+
+    expect(engine.state().races).toEqual([race]);
+    expect(engine.signedOut()).toBe(false);
+  });
+
   it("falls back to a locally known race when previewing fails offline", async () => {
     const race = testRace({ id: uuid(2), name: "Trail Run" });
     const engine = createOfflineEngine({

@@ -458,3 +458,31 @@ main > *:not(.scan):not(.popups) {
     font-weight: 600;
     vertical-align: middle;
 }
+
+/* Over every page, scan view included, until the user signs in again. */
+.signed-out {
+    position: absolute;
+    top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
+    left: var(--spacing-md);
+    right: var(--spacing-md);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) calc(4 * var(--spacing-md));
+    border-radius: var(--border-radius);
+    background-color: var(--error-bg);
+    color: var(--error-color);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.signed-out p {
+    flex: 1;
+    margin: 0;
+}
+
+.signed-out a {
+    color: inherit;
+    font-weight: bold;
+    white-space: nowrap;
+}
