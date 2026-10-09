@@ -14,8 +14,9 @@ import { noopOfflineEngine } from "@/offline";
 
 const api = createAPI(neonDB);
 const apiProxy = createApiProxy(api);
-const renderPage = async (c: Context) =>
-  c.render(
+const renderPage = async (c: Context) => {
+  const url = new URL(c.req.url);
+  return c.render(
     <div id="root">
       {raw(
         await renderToStringAsync(() =>
@@ -23,12 +24,14 @@ const renderPage = async (c: Context) =>
             api: apiProxy(c),
             scanner: noopScanner,
             offline: noopOfflineEngine,
-            url: c.req.path,
+            origin: url.origin,
+            url: url.pathname + url.search,
           }),
         ),
       )}
     </div>,
   );
+};
 
 // Each client-side route needs its own explicit registration here, scoped to
 // its exact path, so it's handled (and auth-guarded) before falling through
@@ -48,6 +51,8 @@ const root = new Hono<{ Bindings: CloudflareBindings }>()
   .get("/summary", renderPage)
   .use("/share", requireAuthPage)
   .get("/share", renderPage)
+  .use("/join/:id", requireAuthPage)
+  .get("/join/:id", renderPage)
   .route("/", api);
 
 export default root;

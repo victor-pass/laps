@@ -1,6 +1,8 @@
+import { createSignal } from "solid-js";
 import type { ApiClient, LapData, RaceData, RunnerData, ScanResult } from "@/api";
 import { runnerRef } from "@/runner";
 import { collapseLaps, DEFAULT_LAP_FILTER_SECONDS } from "@/lapDedupe";
+import type { RaceLink } from "@/qr";
 
 const STORAGE_KEY = "laps:offline";
 
@@ -79,7 +81,7 @@ function save(data: Persisted) {
 export interface OfflineEngine {
   state(): LocalState;
   pendingCount(): number;
-  previewRace(api: ApiClient, id: string): Promise<RaceData>;
+  previewRace(api: ApiClient, link: RaceLink): Promise<RaceData>;
   joinRace(api: ApiClient, race: RaceData): void;
   createRace(api: ApiClient, name: string): RaceData;
   selectRace(api: ApiClient, race: RaceData): void;
@@ -103,7 +105,13 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   let usedStartupSlot = false;
   let draining = false;
 
+  // Every change goes through persist(), so bumping this there lets any
+  // component that reads state() in a reactive scope (e.g. the race picker)
+  // update when a race is joined or selected anywhere in the app.
+  const [changed, notifyChanged] = createSignal(undefined, { equals: false });
+
   const persist = () => {
+    notifyChanged();
     if (persistToStorage) save(store);
   };
 
@@ -285,23 +293,16 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   }
 
   return {
-    state: () => store.state,
+    state: () => {
+      changed();
+      return store.state;
+    },
     pendingCount: () =>
       store.queue.length +
       (store.pendingSelect !== undefined ? 1 : 0) +
       (store.pendingLapFilter !== undefined ? 1 : 0),
 
-    async previewRace(api, id) {
-      try {
-        const res = await api.races[":id"].$get({ param: { id } });
-        if (!res.ok) throw new Error("not found");
-        return (await res.json()) as RaceData;
-      } catch {
-        const known = store.state.races.find((r) => r.id === id);
-        if (!known) throw new Error("Race not found");
-        return known;
-      }
-    },
+    previewRace: (api, link) => previewRace(api, link, store.state.races),
 
     joinRace(api, race) {
       applySelection(race);
@@ -376,12 +377,41 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   };
 }
 
+// The server's copy of a race when it can be reached. When it can't, falls
+// back to what this device already knows, then to the details carried in
+// the join link itself, so a volunteer can join and start scanning offline.
+// A race the server says doesn't exist is never faked from the link -
+// joining it would get dropped on sync, taking every lap queued behind it.
+export async function previewRace(
+  api: ApiClient,
+  link: RaceLink,
+  known: RaceData[],
+): Promise<RaceData> {
+  // undefined when offline - fall through to local details
+  const res = await api.races[":id"]
+    .$get({ param: { id: link.id } })
+    .catch(() => undefined);
+  if (res?.ok) return (await res.json()) as RaceData;
+  if (res && res.status < 500) throw new Error("Race not found");
+
+  const local = known.find((r) => r.id === link.id);
+  if (local) return local;
+  if (link.name)
+    return {
+      id: link.id,
+      name: link.name,
+      lapFilterSeconds: DEFAULT_LAP_FILTER_SECONDS,
+    };
+  throw new Error("Race not found");
+}
+
 // Used for server-side rendering, where there's no browser storage and no
 // real interaction happens - it only needs to satisfy the interface.
 export const noopOfflineEngine: OfflineEngine = {
   state: () => ({ selectedRace: undefined, races: [], lapsByRace: {} }),
   pendingCount: () => 0,
-  previewRace: () => Promise.reject(new Error("unavailable during render")),
+  // Still fetches, so a server render of a join link shows the race.
+  previewRace: (api, link) => previewRace(api, link, []),
   joinRace: () => {},
   createRace: (_api, name) => ({
     id: crypto.randomUUID(),

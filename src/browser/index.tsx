@@ -33,6 +33,7 @@ hydrate(
       scanner={browserScanner}
       offline={offline}
       deviceId={deviceId}
+      origin={window.location.origin}
     />,
   document.getElementById("root")!,
 );

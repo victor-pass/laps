@@ -3,6 +3,7 @@ import {
   createResource,
   createSignal,
   For,
+  onMount,
   Show,
   Suspense,
 } from "solid-js";
@@ -15,23 +16,34 @@ export const ChooseRace: Component = () => {
   const [creating, setCreating] = createSignal(false);
   let popover: HTMLUListElement | undefined;
 
-  const [races, { mutate: setRaces }] = createResource(async () => {
+  const [serverRaces] = createResource(async () => {
     const res = await api.races.$get();
     return (await res.json()) as RaceData[];
   });
 
-  const [selected, { mutate: setSelected }] = createResource(async () => {
+  const [serverSelected] = createResource(async () => {
     const res = await api.races.selected.$get();
     return (await res.json()) as RaceData | null;
   });
 
+  const [mounted, setMounted] = createSignal(false);
+  onMount(() => setMounted(true));
+  const local = () => (mounted() ? offline.state() : undefined);
+  const selected = () => local()?.selectedRace ?? serverSelected();
+
+  const races = () => {
+    const server = serverRaces();
+    const known = local()?.races ?? [];
+    if (!server) return known.length ? [...known] : undefined;
+    return [
+      ...server,
+      ...known.filter((r) => !server.some((s) => s.id === r.id)),
+    ];
+  };
+
   const choose = (race: RaceData) => {
     popover?.hidePopover();
-    // Already a member (it's in this device's own races list) - this is a
-    // pure selection, not a join, so it doesn't re-send membership.
-    // Applies locally immediately, even offline.
     offline.selectRace(api, race);
-    setSelected(race);
   };
 
   const startCreating = () => {
@@ -41,11 +53,7 @@ export const ChooseRace: Component = () => {
 
   const createProps = {
     onCancel: () => setCreating(false),
-    onCreate: (race: RaceData) => {
-      setSelected(race);
-      setRaces((prev) => [...(prev ?? []), race]);
-      setCreating(false);
-    },
+    onCreate: () => setCreating(false),
   };
 
   const trigger = (name: string, disabled = false) => (

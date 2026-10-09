@@ -6,9 +6,10 @@ Allows a team of users to manage a race where each racer has a QR code scanned e
 Every page shares a persistent header: nav links plus a **Choose Race** select/create dropdown, so you can pick a race you already belong to or type a new name to create one from anywhere in the app.
 
 Pages:
-1. **Scan** - The default page. A large camera view that scans any QR code, agnostic to what it encodes. Race QR codes are tagged (`race:<uuid>`); anything else is assumed to be a racer. Scanning a racer's QR code shows a popup with their calculated lap count and adds them to the selected race. Scanning a race QR code asks for confirmation before switching everyone's selected race, since that's an easy thing to trigger by mistake (or mischief) with a photo of the code.
-2. **Show Race QR Code** - If you have access to a race you can display its QR code for others to scan. This is the primary permission model for letting others scan racers into your race.
+1. **Scan** - The default page. A large camera view that scans any QR code, agnostic to what it encodes. Race QR codes are join links (`https://<host>/join/<uuid>`); anything else is assumed to be a racer. Scanning a racer's QR code shows a popup with their calculated lap count and adds them to the selected race. Scanning a race QR code asks for confirmation before switching everyone's selected race, since that's an easy thing to trigger by mistake (or mischief) with a photo of the code.
+2. **Show Race QR Code** - If you have access to a race you can display its QR code (and link) for others to scan. This is the primary permission model for letting others scan racers into your race. Because the code is a plain link, a new volunteer can scan it with their phone's own camera: they sign in, confirm **Join**, and land on the scanner already in the race - no install needed first.
 3. **Race Summary** - Shows every racer in the race, how many laps we think they've completed, and when. Lap timestamps can be compared against a minimum lap time (a column not yet added to the db, likely configurable from this page) to flag duplicate scans. Also allows kicking off a CSV download of the raw lap details for the selected race.
+4. **Join Race** (`/join/<uuid>`) - The landing page for a race link. Signing in from here returns you to it; logging in from any other page lands on the home page.
 
 
 ## Development

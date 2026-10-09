@@ -2,7 +2,7 @@ import { Component, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { context } from "@/context";
 import type { RaceData, ScanResult } from "@/api";
 import { ConfirmRace } from "./ConfirmRace";
-import { parseRaceId } from "@/qr";
+import { parseRaceLink, type RaceLink } from "@/qr";
 import { createScanDedupe } from "@/scanDedupe";
 import { runnerName } from "@/runner";
 import type { CameraFacing } from "@/scanner";
@@ -27,9 +27,9 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     }
   }
 
-  const scanRace = async (id: string) => {
+  const scanRace = async (link: RaceLink) => {
     try {
-      const race = await offline.previewRace(api, id);
+      const race = await offline.previewRace(api, link);
       scanner.stop();
       setPendingRace(race);
     } catch {
@@ -69,9 +69,12 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     if (!trimmed || processing) return;
     processing = true;
     try {
-      const raceId = parseRaceId(trimmed);
-      if (raceId) {
-        await scanRace(raceId);
+      const raceLink = parseRaceLink(trimmed);
+      if (raceLink) {
+        // The code is usually still in view after joining - don't keep
+        // asking to join the race this device is already in.
+        if (raceLink.id !== offline.state().selectedRace?.id)
+          await scanRace(raceLink);
       } else if (scanDedupe.shouldProcess(trimmed)) {
         await scanRunner(trimmed);
       }
@@ -89,8 +92,6 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
     }
   };
 
-  // The listener's cleanup is registered inside onMount because onCleanup
-  // also runs during SSR, where `document` doesn't exist.
   onMount(() => {
     scan();
     document.addEventListener("visibilitychange", onVisibilityChange);

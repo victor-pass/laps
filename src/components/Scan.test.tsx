@@ -1,5 +1,5 @@
 import { afterEach, expect, describe, it, vi } from "vitest";
-import { render } from "@solidjs/testing-library";
+import { render, waitFor } from "@solidjs/testing-library";
 import { Scan } from "./Scan";
 import { TestContext } from "@/test/TestContext";
 import { createOfflineEngine, emptyState } from "@/offline";
@@ -180,13 +180,13 @@ describe("Scan", () => {
       )),
     );
 
-    decode(raceQrData(uuid(1)));
+    decode(raceQrData("https://laps.example", { id: uuid(1), name: "Trail Run" }));
 
     const confirmRace = await views.confirmRace();
     expect(preview$get).toHaveBeenCalledExactlyOnceWith({
       param: { id: uuid(1) },
     });
-    expect(confirmRace.message()).toStrictEqual('Switch to race "Trail Run"?');
+    expect(confirmRace.message()).toStrictEqual('Join race "Trail Run"?');
     expect(stop).toHaveBeenCalledTimes(1);
     expect(join$post).not.toHaveBeenCalled();
 
@@ -223,7 +223,7 @@ describe("Scan", () => {
       )),
     );
 
-    decode(raceQrData(uuid(1)));
+    decode(raceQrData("https://laps.example", { id: uuid(1), name: "Trail Run" }));
     const confirmRace = await views.confirmRace();
 
     confirmRace.cancel();
@@ -249,9 +249,50 @@ describe("Scan", () => {
       )),
     );
 
-    decode(raceQrData(uuid(9)));
+    // The link's name isn't trusted over the server saying no such race.
+    decode(raceQrData("https://laps.example", { id: uuid(9), name: "Ghost" }));
     const popup = await views.popup();
     expect(popup.message()).toStrictEqual("Race not found");
+  });
+
+  it("joins a race offline using the name from its join link", async () => {
+    const { scanner, decode } = fakeScanner();
+    const offlineError = vi.fn().mockRejectedValue(new TypeError("offline"));
+    const preview$get = vi.fn().mockRejectedValue(new TypeError("offline"));
+    const offline = createOfflineEngine(emptyState());
+    const api = {
+      races: { ":id": { $get: preview$get, join: { $post: offlineError } } },
+      runners: { scan: { $post: offlineError } },
+    };
+
+    const views = loadViews(
+      render(() => (
+        <TestContext scanner={scanner} offline={offline} api={api}>
+          <Scan facing="environment" />
+        </TestContext>
+      )),
+    );
+
+    decode(raceQrData("https://laps.example", { id: uuid(4), name: "Trail Run" }));
+    const confirmRace = await views.confirmRace();
+    expect(confirmRace.message()).toStrictEqual('Join race "Trail Run"?');
+    confirmRace.confirm();
+    expect(offline.state().selectedRace).toMatchObject({
+      id: uuid(4),
+      name: "Trail Run",
+    });
+
+    // The code is still in view - don't ask to join it again.
+    decode(raceQrData("https://laps.example", { id: uuid(4), name: "Trail Run" }));
+    expect(preview$get).toHaveBeenCalledTimes(1);
+
+    // Laps keep counting against the joined race while still offline, queued
+    // behind the join so the server has the membership before the laps.
+    decode("Bib 42");
+    await waitFor(() =>
+      expect(offline.state().lapsByRace[uuid(4)]).toHaveLength(1),
+    );
+    expect(offline.pendingCount()).toBeGreaterThanOrEqual(2);
   });
 
   it("stops the camera while hidden and restarts it when visible again", () => {
@@ -291,7 +332,7 @@ describe("Scan", () => {
       )),
     );
 
-    decode(raceQrData(uuid(1)));
+    decode(raceQrData("https://laps.example", { id: uuid(1), name: "Trail Run" }));
     const confirmRace = await views.confirmRace();
 
     setVisibility("hidden");

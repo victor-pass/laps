@@ -1,13 +1,15 @@
 import { Hono, MiddlewareHandler, Context } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { googleAuth } from "@hono/oauth-providers/google";
 import { sign, jwt, verify } from "hono/jwt";
 import { noAuth } from "@/noAuthHandler";
 import { type LoadDB } from "@/db/db";
 import { user } from "@/db/schema";
+import { joinPath, parseJoinUrl } from "@/qr";
 
 const AUTH_TOKEN = "auth_token";
 const AUTH_PATH = "/auth/google";
+const RETURN_TO = "auth_return_to";
 const JWT_PAYLOAD = "jwtPayload";
 const GOOGLE_AUTH_VARIABLE = "user-google";
 
@@ -82,7 +84,17 @@ export const useAuthenticator = (loadDB: LoadDB) =>
         path: "/",
         maxAge: 60 * 60 * 24,
       });
-      return c.redirect("/");
+      // Back to the race join link a new volunteer scanned before they'd
+      // ever signed in. Only join links are honoured, and the redirect is
+      // rebuilt from the parsed link rather than echoed back, so a tampered
+      // cookie can't send anyone off this site.
+      const saved = getCookie(c, RETURN_TO);
+      const link =
+        saved && URL.canParse(saved, c.req.url)
+          ? parseJoinUrl(new URL(saved, c.req.url))
+          : undefined;
+      deleteCookie(c, RETURN_TO, { path: "/" });
+      return c.redirect(link ? joinPath(link) : "/");
     });
 
 export const requireAuthCookie: MiddlewareHandler = (c, next) =>
@@ -95,6 +107,15 @@ export const requireAuthPage: MiddlewareHandler = async (c, next) => {
     c.set(JWT_PAYLOAD, payload);
     return await next();
   } catch {
+    const link = parseJoinUrl(new URL(c.req.url));
+    if (link)
+      setCookie(c, RETURN_TO, joinPath(link), {
+        httpOnly: true,
+        secure: import.meta.env.PROD,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 10,
+      });
     return c.redirect(AUTH_PATH);
   }
 };

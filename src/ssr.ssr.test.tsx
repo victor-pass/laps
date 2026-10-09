@@ -42,6 +42,7 @@ const api: ApiOverrides = {
     $get: mockJSONRequest([race]),
     selected: { $get: mockJSONRequest(race) },
     ":id": {
+      $get: mockJSONRequest(race),
       laps: {
         $get: mockJSONRequest([
           testLap({ runner: "runner-1", info: { name: "Jamie" } }),
@@ -67,6 +68,7 @@ const renderRoute = (url: string) =>
       api: testApi(api),
       scanner: noopScanner,
       offline: noopOfflineEngine,
+      origin: "https://laps.example",
       url,
     }),
   );
@@ -107,6 +109,11 @@ describe("server rendering", () => {
       expect(text(html)).toContain("☰ Share");
       expect(html).toMatch(/<div[^>]*class="show-race-qr"[\s\S]*<svg/);
     });
+
+    it("renders /join/:id with the race to join", async () => {
+      const html = await renderRoute(`/join/${race.id}`);
+      expect(text(html)).toContain('Join race "Spring 5k"? Join Cancel');
+    });
   });
 
   // Components that only appear after an interaction, so no route
@@ -115,13 +122,11 @@ describe("server rendering", () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
-    it("renders the race switch prompt", async () => {
+    it("renders the race join prompt", async () => {
       const html = await render(() => (
         <ConfirmRace race={race} onConfirm={() => {}} onCancel={() => {}} />
       ));
-      expect(text(html)).toStrictEqual(
-        'Switch to race "Spring 5k"? Switch Cancel',
-      );
+      expect(text(html)).toStrictEqual('Join race "Spring 5k"? Join Cancel');
     });
 
     it("renders the new race form", async () => {

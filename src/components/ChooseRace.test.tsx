@@ -1,7 +1,8 @@
 import { expect, describe, it, vi } from "vitest";
 import { render, waitFor } from "@solidjs/testing-library";
 import { ChooseRace } from "./ChooseRace";
-import { TestContext } from "@/test/TestContext";
+import { TestContext, testApi } from "@/test/TestContext";
+import { createOfflineEngine, emptyState } from "@/offline";
 import { jsonResponse, mockJSONRequest, testRace, uuid } from "@/test/fixtures";
 import { loadViews } from "@/test/Views/";
 
@@ -51,6 +52,45 @@ describe("ChooseRace", () => {
       expect(chooseRace.selectedValue).toStrictEqual("Spring 5k"),
     );
     expect(chooseRace.active()).toStrictEqual("Spring 5k");
+  });
+
+  it("follows a race joined elsewhere in the app, even offline", async () => {
+    const $get = mockJSONRequest([
+      testRace({ id: uuid(1), name: "Spring 5k" }),
+    ]);
+    const selected$get = mockJSONRequest(
+      testRace({ id: uuid(1), name: "Spring 5k" }),
+    );
+    const offlineError = vi.fn().mockRejectedValue(new TypeError("offline"));
+    const offline = createOfflineEngine(emptyState());
+
+    const views = loadViews(
+      render(() => (
+        <TestContext
+          offline={offline}
+          api={{ races: { $get, selected: { $get: selected$get } } }}
+        >
+          <ChooseRace />
+        </TestContext>
+      )),
+    );
+
+    const chooseRace = await views.chooseRace();
+    await waitFor(() =>
+      expect(chooseRace.selectedValue).toStrictEqual("Spring 5k"),
+    );
+
+    // e.g. the join page or scanning a race code
+    offline.joinRace(
+      testApi({ races: { ":id": { join: { $post: offlineError } } } }),
+      testRace({ id: uuid(2), name: "Trail Run" }),
+    );
+
+    await waitFor(() =>
+      expect(chooseRace.selectedValue).toStrictEqual("Trail Run"),
+    );
+    expect(chooseRace.options()).toEqual(["Spring 5k", "Trail Run", "New race"]);
+    expect(chooseRace.active()).toStrictEqual("Trail Run");
   });
 
   it("lets the user pick a race they already belong to", async () => {

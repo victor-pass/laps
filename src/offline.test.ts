@@ -1,6 +1,7 @@
 import { expect, describe, it, vi } from "vitest";
 import { createOfflineEngine, emptyState } from "@/offline";
 import type { ApiClient } from "@/api";
+import { DEFAULT_LAP_FILTER_SECONDS } from "@/lapDedupe";
 import { jsonResponse, mockJSONRequest, testRace, uuid } from "@/test/fixtures";
 
 function fakeApi(overrides: {
@@ -207,8 +208,52 @@ describe("offline engine", () => {
     });
     const preview = vi.fn().mockRejectedValue(new TypeError("offline"));
 
-    const found = await engine.previewRace(fakeApi({ preview }), race.id);
+    // The locally known race wins over the link's (possibly stale) name.
+    const found = await engine.previewRace(fakeApi({ preview }), {
+      id: race.id,
+      name: "Old name",
+    });
     expect(found).toEqual(race);
+  });
+
+  it("falls back to the join link's name for an unknown race when offline", async () => {
+    const engine = createOfflineEngine(emptyState());
+    const preview = vi.fn().mockRejectedValue(new TypeError("offline"));
+
+    const found = await engine.previewRace(fakeApi({ preview }), {
+      id: uuid(3),
+      name: "Trail Run",
+    });
+    expect(found).toEqual({
+      id: uuid(3),
+      name: "Trail Run",
+      lapFilterSeconds: DEFAULT_LAP_FILTER_SECONDS,
+    });
+  });
+
+  it("prefers the server's copy of a race over the join link's name", async () => {
+    const engine = createOfflineEngine(emptyState());
+    const race = testRace({ id: uuid(3), name: "Trail Run" });
+
+    const found = await engine.previewRace(
+      fakeApi({ preview: mockJSONRequest(race) }),
+      { id: uuid(3), name: "Something else" },
+    );
+    expect(found).toEqual(race);
+  });
+
+  it("doesn't fall back to the join link when the server says the race doesn't exist", async () => {
+    const engine = createOfflineEngine(emptyState());
+    const preview = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 404 }));
+
+    await expect(
+      engine.previewRace(fakeApi({ preview }), {
+        id: uuid(3),
+        name: "Trail Run",
+      }),
+    ).rejects.toThrow("Race not found");
   });
 
   it("throws previewing a race that isn't known locally either", async () => {
@@ -216,7 +261,7 @@ describe("offline engine", () => {
     const preview = vi.fn().mockRejectedValue(new TypeError("offline"));
 
     await expect(
-      engine.previewRace(fakeApi({ preview }), uuid(3)),
+      engine.previewRace(fakeApi({ preview }), { id: uuid(3) }),
     ).rejects.toThrow();
   });
 

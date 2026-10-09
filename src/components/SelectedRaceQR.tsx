@@ -5,25 +5,26 @@ import type { RaceData } from "@/api";
 import { raceQrData } from "@/qr";
 
 export const ShowRaceQR: Component = () => {
-  const { api } = context();
+  const { api, origin } = context();
   const [raceDetails] = createResource(async () => {
     const res = await api.races.selected.$get();
     const race = (await res.json()) as RaceData;
-    return race
-      ? {
-          race,
-          svg: await QRCode.toString(raceQrData(race.id), { type: "svg" }),
-        }
-      : undefined;
+    if (!race) return undefined;
+    const link = raceQrData(origin, race);
+    return { race, link, svg: await QRCode.toString(link, { type: "svg" }) };
   });
 
   return (
     <div class="show-race-qr">
       <Suspense fallback={<p>Loading race...</p>}>
-        <Show when={raceDetails()} fallback={<p>No race selected.</p>}>
-          {
-            (details) => <div innerHTML={details().svg} /> // eslint-disable-line solid/no-innerhtml -- SVG is generated
-          }
+        <Show when={raceDetails()} fallback={<p>Select a race.</p>}>
+          {(details) => (
+            <>
+              {/* eslint-disable-next-line solid/no-innerhtml -- SVG is generated */}
+              <div innerHTML={details().svg} />
+              <p>Scan to join: {details().race.name}</p>
+            </>
+          )}
         </Show>
       </Suspense>
     </div>

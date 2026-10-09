@@ -9,9 +9,8 @@ export interface AppContextValue {
   scanner: QrScanner;
   offline: OfflineEngine;
   popup: PopupService;
-  // This browser's id from getDeviceId(). Absent during SSR, which can't
-  // know which device is asking.
   deviceId?: string;
+  origin: string;
 }
 
 export const AppContext = createContext<AppContextValue>();

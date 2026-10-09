@@ -10,12 +10,14 @@ import { Scan } from "@/components/Scan";
 import { ChooseRace } from "@/components/ChooseRace";
 import { Popups, createPopupService } from "@/components/Popup";
 import { Menu } from "@/components/Menu";
+import { JoinRace } from "@/components/JoinRace";
 
 interface AppProps {
   api: ApiClient;
   scanner: QrScanner;
   offline: OfflineEngine;
   deviceId?: string;
+  origin: string;
   url?: string;
 }
 
@@ -38,6 +40,7 @@ export const App: Component<AppProps> = (props) => {
     "scanner",
     "offline",
     "deviceId",
+    "origin",
   ]);
   const popup = createPopupService();
 
@@ -52,6 +55,7 @@ export const App: Component<AppProps> = (props) => {
         />
         <Route path="/summary" component={Summary} />
         <Route path="/share" component={ShowRaceQR} />
+        <Route path="/join/:id" component={JoinRace} />
       </Router>
     </AppContext.Provider>
   );

@@ -8,6 +8,8 @@ import { splitProps, ParentComponent } from "solid-js";
 import { mockJSONRequest } from "./fixtures";
 import { Popups, createPopupService, PopupService } from "@/components/Popup";
 
+export const TEST_ORIGIN = "https://laps.test";
+
 type MockedApi<T> = { [K in keyof T]?: Mock };
 
 export type ApiOverrides = {
@@ -30,6 +32,7 @@ export type AppContextOverrides = {
   offline?: OfflineEngine;
   popup?: PopupService;
   deviceId?: string;
+  origin?: string;
 };
 
 export function testApi(overrides: ApiOverrides = {}): ApiClient {
@@ -75,6 +78,7 @@ function testContext(overrides: AppContextOverrides): AppContextValue {
     offline: overrides.offline ?? createOfflineEngine(emptyState()),
     popup: overrides.popup ?? createPopupService(),
     deviceId: overrides.deviceId,
+    origin: overrides.origin ?? TEST_ORIGIN,
   };
 }
 

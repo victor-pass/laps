@@ -298,7 +298,7 @@ main > *:not(.scan):not(.popups) {
 }
 
 .popup,
-.scan .confirm-race {
+.confirm-race {
     text-align: center;
     margin: 0;
     padding: var(--spacing-md);
@@ -311,14 +311,22 @@ main > *:not(.scan):not(.popups) {
     flex-shrink: 0;
 }
 
-.scan .confirm-race {
+.confirm-race {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
 }
 
-.scan .confirm-race p {
+.confirm-race p {
     margin: 0;
+}
+
+.show-race-qr a {
+    overflow-wrap: anywhere;
+}
+.show-race-qr p {
+    text-align: center;
+    font-size: 1em;
 }
 
 .popup.error {

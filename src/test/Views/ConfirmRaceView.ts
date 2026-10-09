@@ -6,17 +6,19 @@ export class ConfirmRaceView extends View {
 
   message = () => this.$("p")?.textContent;
 
-  private button(text: string) {
-    const button = this.$$("button").find((el) => el.textContent === text);
-    if (!button) throw new Error(`Button "${text}" not found`);
+  confirmLabel = () => this.$("button.confirm")?.textContent;
+
+  private button(cls: string) {
+    const button = this.$(`button.${cls}`);
+    if (!button) throw new Error(`Button ".${cls}" not found`);
     return button;
   }
 
   confirm() {
-    fireEvent.click(this.button("Switch"));
+    fireEvent.click(this.button("confirm"));
   }
 
   cancel() {
-    fireEvent.click(this.button("Cancel"));
+    fireEvent.click(this.button("cancel"));
   }
 }
