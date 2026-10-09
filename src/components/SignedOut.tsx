@@ -1,9 +1,6 @@
 import { Component, Show } from "solid-js";
 import { context } from "@/context";
 
-// Shown when the server has rejected this device's login (it expires after
-// a day). Nothing is lost meanwhile: scans keep counting here and stay
-// queued, and signing in reloads the app, whose startup sync sends them.
 export const SignedOut: Component = () => {
   const { offline } = context();
   const waiting = () => {

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { expect, describe, it } from "vitest";
 import { randomBytes } from "node:crypto";
+import { decode } from "hono/jwt";
 import { inMemoryDB } from "@/test/inMemoryDB";
 import { uuid } from "@/test/fixtures";
 import { requireAuthPage, useAuthenticator } from "@/security";
@@ -24,6 +25,22 @@ const cookies = (res: Response) =>
 
 const login = (cookie = "") =>
   app().request("/auth/google", { headers: { cookie } }, env);
+
+describe("login", () => {
+  it("lasts a week, so volunteers who join early are still signed in on race day", async () => {
+    const week = 60 * 60 * 24 * 7;
+    const loggedIn = await login();
+
+    const cookie = loggedIn.headers
+      .getSetCookie()
+      .find((c) => c.startsWith("auth_token="))!;
+    expect(cookie).toContain(`Max-Age=${week}`);
+
+    const token = cookie.split(";")[0]!.slice("auth_token=".length);
+    const { exp } = decode(token).payload as { exp: number };
+    expect(exp - Date.now() / 1000).toBeCloseTo(week, -1);
+  });
+});
 
 describe("login redirect", () => {
   it("returns to the join link that required login, name included", async () => {

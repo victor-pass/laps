@@ -10,6 +10,7 @@ import { joinPath, parseJoinUrl } from "@/qr";
 const AUTH_TOKEN = "auth_token";
 const AUTH_PATH = "/auth/google";
 const RETURN_TO = "auth_return_to";
+const LOGIN_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 const JWT_PAYLOAD = "jwtPayload";
 const GOOGLE_AUTH_VARIABLE = "user-google";
 
@@ -64,7 +65,7 @@ export const useAuthenticator = (loadDB: LoadDB) =>
         sub: googleUser.id!,
         email: googleUser.email!,
         name: googleUser.name!,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+        exp: Math.floor(Date.now() / 1000) + LOGIN_LIFETIME_SECONDS,
       };
       const token = await sign(payload, c.env.JWT_SECRET!);
 
@@ -82,12 +83,8 @@ export const useAuthenticator = (loadDB: LoadDB) =>
         secure: import.meta.env.PROD,
         sameSite: "lax",
         path: "/",
-        maxAge: 60 * 60 * 24,
+        maxAge: LOGIN_LIFETIME_SECONDS,
       });
-      // Back to the race join link a new volunteer scanned before they'd
-      // ever signed in. Only join links are honoured, and the redirect is
-      // rebuilt from the parsed link rather than echoed back, so a tampered
-      // cookie can't send anyone off this site.
       const saved = getCookie(c, RETURN_TO);
       const link =
         saved && URL.canParse(saved, c.req.url)
