@@ -3,13 +3,13 @@ import {
   createResource,
   createSignal,
   For,
-  onMount,
   Show,
   Suspense,
 } from "solid-js";
 import { context } from "@/context";
 import type { RaceData } from "@/api";
 import { CreateRace } from "@/components/CreateRace";
+import { useDeviceState, useSelectedRace } from "@/selectedRace";
 
 export const ChooseRace: Component = () => {
   const { api, offline } = context();
@@ -21,15 +21,8 @@ export const ChooseRace: Component = () => {
     return (await res.json()) as RaceData[];
   });
 
-  const [serverSelected] = createResource(async () => {
-    const res = await api.races.selected.$get();
-    return (await res.json()) as RaceData | null;
-  });
-
-  const [mounted, setMounted] = createSignal(false);
-  onMount(() => setMounted(true));
-  const local = () => (mounted() ? offline.state() : undefined);
-  const selected = () => local()?.selectedRace ?? serverSelected();
+  const local = useDeviceState();
+  const selected = useSelectedRace();
 
   const races = () => {
     const server = serverRaces();

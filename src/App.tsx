@@ -5,7 +5,7 @@ import { QrScanner } from "@/scanner";
 import { OfflineEngine } from "@/offline";
 import { AppContext } from "@/context";
 import { Summary } from "@/components/Summary";
-import { ShowRaceQR } from "@/components/SelectedRaceQR";
+import { ShowRaceQR } from "@/components/RaceQR";
 import { Scan } from "@/components/Scan";
 import { ChooseRace } from "@/components/ChooseRace";
 import { Popups, createPopupService } from "@/components/Popup";

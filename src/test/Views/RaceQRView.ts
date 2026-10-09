@@ -4,7 +4,7 @@ import jsQR from "jsqr";
 // Big enough for jsQR to resolve each module; the SVG scales to fit.
 const QR_SIZE = 300;
 
-export class SelectedRaceQRView extends View {
+export class RaceQRView extends View {
   static selector = ".show-race-qr";
   hasQrCode = () => !!this.$("svg");
 
