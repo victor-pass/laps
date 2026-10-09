@@ -56,3 +56,9 @@ pnpm run cf-typegen
 
 We authenticate via google auth
 Locally, authentication will not run by default.  To use google authenticator please set the`GOOGLE_ID` and `GOOGLE_SECRET` from the [google auth console](https://console.cloud.google.com/auth/clients?authuser=2&orgonly=true&project=laps-509419)
+
+## License
+
+Copyright 2026 Stephen Smithwick
+
+Licensed under the [Apache License, Version 2.0](LICENSE).

@@ -20,6 +20,7 @@
     "pwa"
   ],
   "author": "Stephen Smithwick",
+  "license": "Apache-2.0",
   "packageManager": "pnpm@10.12.1",
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.3",
