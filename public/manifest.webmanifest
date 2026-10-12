@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "Laps",
   "short_name": "Laps",
   "description": "Track the times races make a lap via a QR Code scan",
@@ -6,6 +7,11 @@
   "background_color": "#ffffff",
   "display": "standalone",
   "start_url": "/",
+  "scope": "/",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "handle_links": "preferred",
   "icons": [
     {
       "src": "/lap-track.icon.192x192.png",
