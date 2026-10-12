@@ -23,7 +23,7 @@
     --spacing-md: 0.25rem;
     --border-radius: 24px;
     --pill-radius: 999px;
-    --toolbar-clearance: 6rem;
+    --toolbar-clearance: 4rem;
 }
 
 html,
@@ -264,10 +264,6 @@ main > *:not(.scan):not(.popups) {
     padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
 }
 
-/* Scrolling pages end with room for the floating navigation pills, so their
-   last content (e.g. Summary's export button) can always scroll clear of
-   them. The scan view sits under the pills on purpose and the race QR stops
-   above them; neither scrolls. */
 main:not(:has(> .scan, > .show-race-qr))::after {
     content: "";
     display: block;
@@ -295,8 +291,6 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     bottom: calc(var(--spacing-md) + var(--toolbar-clearance));
 }
 
-/* Stacked bottom-up: the newest popup sits nearest the toolbar and older ones
-   are pushed up above it. Clicks pass through the gaps to the page below. */
 .popups {
     display: flex;
     flex-direction: column;
@@ -333,7 +327,7 @@ main:not(:has(> .scan, > .show-race-qr))::after {
 
 .show-race-qr {
     height: calc(
-        100% - var(--toolbar-clearance) / 4 - env(safe-area-inset-bottom, 0px)
+        100% - var(--toolbar-clearance) / 2 - env(safe-area-inset-bottom, 0px)
     );
     display: flex;
     flex-direction: column;
