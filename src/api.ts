@@ -1,10 +1,18 @@
 import { Hono, MiddlewareHandler } from "hono";
 import { hc } from "hono/client";
 import { validator } from "hono/validator";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { LoadDB, DB, setDB, db } from "@/db/db";
-import { device, lap, race, runner, user, userRace } from "@/db/schema";
+import {
+  device,
+  lap,
+  race,
+  raceRunner,
+  runner,
+  user,
+  userRace,
+} from "@/db/schema";
 import { Context } from "hono";
 import { errorHandler } from "./errors";
 import { requireAuthCookie, authUser } from "./security";
@@ -56,9 +64,10 @@ export type ApiEnv = {
 type Lap = typeof lap.$inferSelect;
 export interface LapData extends Omit<Lap, "timestamp"> {
   timestamp: string;
-  // The runner's scanned info, so lap lists can show a name without a
-  // separate lookup per runner.
+  // The runner's scanned info and assigned name, so lap lists can show a
+  // name without a separate lookup per runner.
   info: unknown;
+  name: string | null;
   // The scanning device's label, if it was given one.
   deviceLabel: string | null;
   // The name of the user signed in when the lap reached the server.
@@ -72,6 +81,12 @@ export interface RaceData {
 }
 
 export type RunnerData = typeof runner.$inferSelect;
+
+// A runner on a race's racers page, with how many laps they've recorded in
+// it (unfiltered) - only a racer with none can be removed.
+export interface RacerData extends RunnerData {
+  laps: number;
+}
 
 export interface ScanResult {
   runner: RunnerData;
@@ -98,6 +113,53 @@ export type ApiClient = ReturnType<typeof hc<ApiType>>;
 // `json` key.
 const jsonBody = <T>() => validator("json", (value) => value as T);
 
+async function requireJoined(c: ApiContext, raceId: string) {
+  const [joined] = UUID_RE.test(raceId)
+    ? await db(c)
+        .select({ race: userRace.race })
+        .from(userRace)
+        .where(
+          and(eq(userRace.user, authUser(c).sub), eq(userRace.race, raceId)),
+        )
+    : [];
+  if (!joined) throw new HTTPException(400, { message: "Race not joined" });
+}
+
+// The race's racers, or just the given ones, with their lap counts in it.
+async function racers(
+  c: ApiContext,
+  raceId: string,
+  refs?: string[],
+): Promise<RacerData[]> {
+  return await db(c)
+    .select({
+      ref: runner.ref,
+      info: runner.info,
+      name: runner.name,
+      laps: count(lap.id),
+    })
+    .from(raceRunner)
+    .innerJoin(runner, eq(runner.ref, raceRunner.runner))
+    .leftJoin(
+      lap,
+      and(eq(lap.runner, raceRunner.runner), eq(lap.race, raceRunner.race)),
+    )
+    .where(
+      and(
+        eq(raceRunner.race, raceId),
+        refs ? inArray(raceRunner.runner, refs) : undefined,
+      ),
+    )
+    .groupBy(runner.ref);
+}
+
+// A racer of the race, or a 404.
+async function requireRacer(c: ApiContext, raceId: string, ref: string) {
+  const [found] = UUID_RE.test(ref) ? await racers(c, raceId, [ref]) : [];
+  if (!found) throw new HTTPException(404, { message: "Racer not found" });
+  return found;
+}
+
 export const createAPI = (loadDB: LoadDB) =>
   new Hono<ApiEnv>()
     .use(setDB(loadDB))
@@ -112,6 +174,7 @@ export const createAPI = (loadDB: LoadDB) =>
           runner: lap.runner,
           timestamp: lap.timestamp,
           info: runner.info,
+          name: runner.name,
           device: lap.device,
           deviceLabel: device.label,
           user: lap.user,
@@ -282,6 +345,64 @@ export const createAPI = (loadDB: LoadDB) =>
 
       return c.json<RaceData>(found);
     })
+    .get("/races/:id/runners", async (c) => {
+      const id = c.req.param("id");
+      await requireJoined(c, id);
+      return c.json<RacerData[]>(await racers(c, id));
+    })
+    // Adds a racer per name. Their id is all their QR code holds, so the
+    // name stays in the app.
+    .post(
+      "/races/:id/runners",
+      jsonBody<{ names: string[] }>(),
+      async (c) => {
+        const id = c.req.param("id");
+        await requireJoined(c, id);
+        const { names } = c.req.valid("json");
+        const added = (Array.isArray(names) ? names : [])
+          .map((name) => (typeof name === "string" ? name.trim() : ""))
+          .filter(Boolean)
+          .map((name) => ({ ref: crypto.randomUUID(), name }));
+        if (!added.length)
+          throw new HTTPException(400, { message: "names are required" });
+
+        // No transaction (neon-http has none) - if the second insert fails
+        // the new runners are just unlisted, and the client can retry.
+        await db(c).insert(runner).values(added);
+        await db(c)
+          .insert(raceRunner)
+          .values(added.map(({ ref }) => ({ race: id, runner: ref })));
+        return c.json<RacerData[]>(
+          added.map((r) => ({ ...r, info: null, laps: 0 })),
+        );
+      },
+    )
+    .patch(
+      "/races/:id/runners/:ref",
+      jsonBody<{ name: string | null }>(),
+      async (c) => {
+        const { id, ref } = c.req.param();
+        await requireJoined(c, id);
+        const found = await requireRacer(c, id, ref);
+        const { name: raw } = c.req.valid("json");
+        const name = typeof raw === "string" && raw.trim() ? raw.trim() : null;
+
+        await db(c).update(runner).set({ name }).where(eq(runner.ref, ref));
+        return c.json<RacerData>({ ...found, name });
+      },
+    )
+    .delete("/races/:id/runners/:ref", async (c) => {
+      const { id, ref } = c.req.param();
+      await requireJoined(c, id);
+      const found = await requireRacer(c, id, ref);
+      if (found.laps > 0)
+        throw new HTTPException(409, { message: "Racer has laps" });
+
+      await db(c)
+        .delete(raceRunner)
+        .where(and(eq(raceRunner.race, id), eq(raceRunner.runner, ref)));
+      return c.json({ ok: true });
+    })
     .post(
       "/runners/scan",
       jsonBody<{ data: string; race: string; timestamp: string }>(),
@@ -321,6 +442,10 @@ export const createAPI = (loadDB: LoadDB) =>
         await db(c)
           .insert(runner)
           .values({ ref, info: data })
+          .onConflictDoNothing();
+        await db(c)
+          .insert(raceRunner)
+          .values({ race: selected.id, runner: ref })
           .onConflictDoNothing();
 
         await db(c)

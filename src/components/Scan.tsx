@@ -58,7 +58,7 @@ export const Scan: Component<{ facing: CameraFacing }> = (props) => {
       // isn't a new lap - showing "Lap N" again would just stack a repeat
       // of the popup already on screen.
       if (!result.counted) return;
-      const name = runnerName(result.runner.info);
+      const name = runnerName(result.runner);
       popup.push({
         message: `Lap ${result.lapCount}${name ? ` - ${name}` : ""}`,
         type: "success",

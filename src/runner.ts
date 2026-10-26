@@ -1,15 +1,27 @@
-// A runner's info is whatever their QR code held: plain text (used as-is)
-// or JSON with a `name`.
-export function runnerName(info: unknown): string | undefined {
-  if (typeof info === "string") return info;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The name an organizer assigned, else whatever the runner's QR code held:
+// plain text (used as-is, unless it's just an id) or JSON with a `name`.
+export function runnerName(runner: {
+  name?: string | null;
+  info: unknown;
+}): string | undefined {
+  if (runner.name) return runner.name;
+  const { info } = runner;
+  if (typeof info === "string") return UUID_RE.test(info) ? undefined : info;
   if (info && typeof info === "object" && "name" in info) {
     const { name } = info as { name: unknown };
     if (typeof name === "string") return name;
   }
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// What to print in a runner's QR code. Runners added on the racers page
+// get their bare id, so nothing personal is encoded. A runner first seen
+// by a scan gets the same text back, so a reprint matches the original.
+export function runnerQrData(runner: { ref: string; info: unknown }): string {
+  return typeof runner.info === "string" ? runner.info : runner.ref;
+}
 
 const NAMESPACE = "b1a7f3d0-6e3a-4c8f-9b1a-2f6d4c9a7e11";
 

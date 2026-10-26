@@ -226,9 +226,10 @@ describe("Scan", () => {
     decode(raceQrData("https://laps.example", { id: uuid(1), name: "Trail Run" }));
 
     const confirmRace = await views.confirmRace();
-    expect(preview$get).toHaveBeenCalledExactlyOnceWith({
-      param: { id: uuid(1) },
-    });
+    expect(preview$get).toHaveBeenCalledExactlyOnceWith(
+      { param: { id: uuid(1) } },
+      expect.anything(),
+    );
     expect(confirmRace.message()).toStrictEqual('Join race "Trail Run"?');
     expect(stop).toHaveBeenCalledTimes(1);
     expect(join$post).not.toHaveBeenCalled();

@@ -50,7 +50,10 @@ describe("JoinRace", () => {
     });
 
     const confirmRace = await views.confirmRace();
-    expect($get).toHaveBeenCalledExactlyOnceWith({ param: { id: uuid(3) } });
+    expect($get).toHaveBeenCalledExactlyOnceWith(
+      { param: { id: uuid(3) } },
+      expect.anything(),
+    );
     expect(confirmRace.message()).toStrictEqual('Join race "Trail Run"?');
     expect(confirmRace.confirmLabel()).toStrictEqual("Join");
     expect(join$post).not.toHaveBeenCalled();

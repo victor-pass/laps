@@ -8,6 +8,7 @@ const scanItems = [
 
 const pageItems = [
   { href: "/summary", label: "Summary" },
+  { href: "/racers", label: "Racers" },
   { href: "/share", label: "Share" },
 ];
 

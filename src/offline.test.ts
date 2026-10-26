@@ -1,4 +1,4 @@
-import { expect, describe, it, vi } from "vitest";
+import { expect, describe, it, onTestFinished, vi } from "vitest";
 import { createOfflineEngine, emptyState } from "@/offline";
 import type { ApiClient } from "@/api";
 import { DEFAULT_LAP_FILTER_SECONDS } from "@/lapDedupe";
@@ -14,6 +14,7 @@ function fakeApi(overrides: {
   lapFilter?: ReturnType<typeof vi.fn>;
   laps?: ReturnType<typeof vi.fn>;
   preview?: ReturnType<typeof vi.fn>;
+  runners?: ReturnType<typeof vi.fn>;
 }): ApiClient {
   return {
     races: {
@@ -29,6 +30,7 @@ function fakeApi(overrides: {
         join: { $post: overrides.join ?? mockJSONRequest(null) },
         laps: { $get: overrides.laps ?? mockJSONRequest([]) },
         devices: { $get: mockJSONRequest([]) },
+        runners: { $get: overrides.runners ?? mockJSONRequest([]) },
       },
     },
     runners: { scan: { $post: overrides.scan ?? mockJSONRequest(null) } },
@@ -38,6 +40,40 @@ function fakeApi(overrides: {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("offline engine", () => {
+  it("names a scanned racer from the race's racers, fetched on resync", async () => {
+    const engine = createOfflineEngine(emptyState());
+    const race = testRace({ id: uuid(1) });
+    await engine.resync(
+      fakeApi({
+        races: mockJSONRequest([race]),
+        selected: mockJSONRequest(race),
+        runners: mockJSONRequest([
+          { ref: uuid(11), info: null, name: "Sam", laps: 0 },
+        ]),
+      }),
+    );
+
+    const result = await engine.scan(fakeApi({}), uuid(11));
+
+    expect(result.runner.name).toBe("Sam");
+  });
+
+  it("names a scanned racer from names remembered on this device", async () => {
+    const race = testRace({ id: uuid(1) });
+    const engine = createOfflineEngine({
+      ...emptyState(),
+      selectedRace: race,
+      races: [race],
+    });
+    engine.rememberNames(race.id, [
+      { ref: uuid(11), info: null, name: "Sam" },
+    ]);
+
+    const result = await engine.scan(fakeApi({}), uuid(11));
+
+    expect(result.runner.name).toBe("Sam");
+  });
+
   it("throws when scanning without a selected race", async () => {
     const engine = createOfflineEngine(emptyState());
     await expect(engine.scan(fakeApi({}), "bib:1")).rejects.toThrow(
@@ -298,6 +334,37 @@ describe("offline engine", () => {
       name: "Old name",
     });
     expect(found).toEqual(race);
+  });
+
+  it("falls back to the join link's name when previewing never answers", async () => {
+    // Stands in for the request timing out, without waiting for it.
+    const timeout = new AbortController();
+    const timeoutSpy = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(timeout.signal);
+    onTestFinished(() => timeoutSpy.mockRestore());
+    const engine = createOfflineEngine(emptyState());
+    // Like fetch: no answer, only giving up when its signal aborts.
+    const preview = vi.fn(
+      (_args: unknown, { init }: { init: RequestInit }) =>
+        new Promise((_, reject) =>
+          init.signal?.addEventListener("abort", () =>
+            reject(init.signal?.reason),
+          ),
+        ),
+    );
+
+    const found = engine.previewRace(fakeApi({ preview }), {
+      id: uuid(3),
+      name: "Trail Run",
+    });
+    timeout.abort(new DOMException("timed out", "TimeoutError"));
+
+    await expect(found).resolves.toEqual({
+      id: uuid(3),
+      name: "Trail Run",
+      lapFilterSeconds: DEFAULT_LAP_FILTER_SECONDS,
+    });
   });
 
   it("falls back to the join link's name for an unknown race when offline", async () => {

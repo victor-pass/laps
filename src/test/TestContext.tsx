@@ -19,6 +19,11 @@ export type ApiOverrides = {
       join?: MockedApi<ApiClient["races"][":id"]["join"]>;
       laps?: MockedApi<ApiClient["races"][":id"]["laps"]>;
       devices?: MockedApi<ApiClient["races"][":id"]["devices"]>;
+      runners?: MockedApi<
+        Pick<ApiClient["races"][":id"]["runners"], "$get" | "$post">
+      > & {
+        ":ref"?: MockedApi<ApiClient["races"][":id"]["runners"][":ref"]>;
+      };
     };
   };
   runners?: {
@@ -56,6 +61,19 @@ export function testApi(overrides: ApiOverrides = {}): ApiClient {
         devices: {
           $get: overrides.races?.[":id"]?.devices?.$get ?? mockJSONRequest([]),
         },
+        runners: {
+          $get: overrides.races?.[":id"]?.runners?.$get ?? mockJSONRequest([]),
+          $post:
+            overrides.races?.[":id"]?.runners?.$post ?? mockJSONRequest([]),
+          ":ref": {
+            $patch:
+              overrides.races?.[":id"]?.runners?.[":ref"]?.$patch ??
+              mockJSONRequest(null),
+            $delete:
+              overrides.races?.[":id"]?.runners?.[":ref"]?.$delete ??
+              mockJSONRequest({ ok: true }),
+          },
+        },
       },
     },
     runners: {
@@ -80,6 +98,11 @@ export function offlineApi(): ApiOverrides {
         join: { $post: unreachable() },
         laps: { $get: unreachable() },
         devices: { $get: unreachable() },
+        runners: {
+          $get: unreachable(),
+          $post: unreachable(),
+          ":ref": { $patch: unreachable(), $delete: unreachable() },
+        },
       },
     },
     runners: { scan: { $post: unreachable() } },

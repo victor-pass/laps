@@ -22,7 +22,25 @@ export const race = pgTable("race", {
 export const runner = pgTable("runner", {
   ref: uuid("ref").primaryKey(),
   info: json("info"),
+  // Assigned by a race organizer on the racers page; never encoded in a
+  // printed QR code, since racers may be children.
+  name: text("name"),
 });
+
+// Which runners belong to a race: added on the racers page or by their
+// first scan into it.
+export const raceRunner = pgTable(
+  "race_runner",
+  {
+    race: uuid("race_id")
+      .notNull()
+      .references(() => race.id, { onDelete: "cascade" }),
+    runner: uuid("runner_ref")
+      .notNull()
+      .references(() => runner.ref),
+  },
+  (table) => [primaryKey({ columns: [table.race, table.runner] })],
+);
 export const lap = pgTable(
   "lap",
   {

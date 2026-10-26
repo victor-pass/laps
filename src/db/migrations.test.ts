@@ -65,6 +65,35 @@ describe("lap device foreign key migration", () => {
   });
 });
 
+describe("race runner migration", () => {
+  it("lists every runner already scanned into a race as one of its racers", async () => {
+    const migration = (await readdir(MIGRATIONS)).find((dir) =>
+      dir.endsWith("_racer_setup"),
+    )!;
+    const { client, applyRest } = await migratedUpTo(migration);
+    await client.exec(`
+      INSERT INTO race (id, name) VALUES
+        ('${uuid(0)}', 'Spring 5k'),
+        ('${uuid(9)}', 'Other race');
+      INSERT INTO runner (ref) VALUES ('${uuid(1)}'), ('${uuid(2)}'), ('${uuid(3)}');
+      INSERT INTO lap (runner_ref, race_id, timestamp) VALUES
+        ('${uuid(1)}', '${uuid(0)}', '2026-01-01T10:00:00Z'),
+        ('${uuid(1)}', '${uuid(0)}', '2026-01-01T10:10:00Z'),
+        ('${uuid(2)}', '${uuid(9)}', '2026-01-01T10:00:00Z');
+    `);
+
+    await applyRest();
+
+    const { rows } = await client.query(
+      `SELECT race_id, runner_ref FROM race_runner ORDER BY runner_ref`,
+    );
+    expect(rows).toEqual([
+      { race_id: uuid(0), runner_ref: uuid(1) },
+      { race_id: uuid(9), runner_ref: uuid(2) },
+    ]);
+  });
+});
+
 describe("lap user migration", () => {
   it("backfills existing laps with their device's user", async () => {
     const { client, applyRest } = await migratedUpTo(

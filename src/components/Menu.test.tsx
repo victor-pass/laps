@@ -52,6 +52,7 @@ describe("Menu", () => {
       "Front",
       "Back",
       "Summary",
+      "Racers",
       "Share",
     ]);
     expect(menu.group()).toStrictEqual({

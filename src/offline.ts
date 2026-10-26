@@ -21,6 +21,9 @@ export interface LocalState {
   selectedRace?: RaceData;
   races: RaceData[];
   lapsByRace: Record<string, LocalLap[]>;
+  // Names assigned on the racers page, by race then runner, so a scan can
+  // name its racer without waiting on the server.
+  namesByRace?: Record<string, Record<string, string>>;
 }
 
 // Events: each one is a distinct thing that happened and must be replayed
@@ -104,6 +107,7 @@ export interface OfflineEngine {
   selectRace(api: ApiClient, race: RaceData): void;
   setLapFilter(api: ApiClient, race: RaceData, seconds: number): void;
   scan(api: ApiClient, data: string): Promise<LocalScanResult>;
+  rememberNames(raceId: string, runners: RunnerData[]): void;
   drain(api: ApiClient): Promise<void>;
   resync(api: ApiClient): Promise<void>;
 }
@@ -172,6 +176,12 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
 
   function recordLocalLap(race: string, runner: string, timestamp: string) {
     (store.state.lapsByRace[race] ??= []).push({ runner, timestamp });
+  }
+
+  function rememberNames(raceId: string, runners: RunnerData[]) {
+    (store.state.namesByRace ??= {})[raceId] = Object.fromEntries(
+      runners.flatMap((r) => (r.name ? [[r.ref, r.name]] : [])),
+    );
   }
 
   function hasPendingWork(): boolean {
@@ -303,9 +313,10 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
 
       const race = store.state.selectedRace;
       if (race) {
-        const lapsRes = await api.races[":id"].laps.$get({
-          param: { id: race.id },
-        });
+        const [lapsRes, runnersRes] = await Promise.all([
+          api.races[":id"].laps.$get({ param: { id: race.id } }),
+          api.races[":id"].runners.$get({ param: { id: race.id } }),
+        ]);
         if (lapsRes.ok) {
           const laps = (await lapsRes.json()) as LapData[];
           store.state.lapsByRace[race.id] = laps.map((l) => ({
@@ -313,6 +324,8 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
             timestamp: l.timestamp,
           }));
         }
+        if (runnersRes.ok)
+          rememberNames(race.id, (await runnersRes.json()) as RunnerData[]);
       }
       persist();
     } catch {
@@ -400,8 +413,17 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       persist();
       void drain(api);
 
-      const runnerData: RunnerData = { ref, info: parseInfo(data) };
+      const runnerData: RunnerData = {
+        ref,
+        info: parseInfo(data),
+        name: store.state.namesByRace?.[race.id]?.[ref] ?? null,
+      };
       return { runner: runnerData, race, lapCount, counted: lapCount > before };
+    },
+
+    rememberNames(raceId, runners) {
+      rememberNames(raceId, runners);
+      persist();
     },
 
     drain,
@@ -409,13 +431,21 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
   };
 }
 
+// The scanner ignores every code while a race preview is loading, so a
+// request that never answers (e.g. the phone slept mid-request) mustn't
+// leave it waiting forever - give up and use what this device knows.
+export const PREVIEW_RACE_TIMEOUT_MS = 5000;
+
 export async function previewRace(
   api: ApiClient,
   link: RaceLink,
   known: RaceData[],
 ): Promise<RaceData> {
   const res = await api.races[":id"]
-    .$get({ param: { id: link.id } })
+    .$get(
+      { param: { id: link.id } },
+      { init: { signal: AbortSignal.timeout(PREVIEW_RACE_TIMEOUT_MS) } },
+    )
     .catch(() => undefined);
   if (res?.ok) return (await res.json()) as RaceData;
   if (res && res.status < 500 && res.status !== 401)
@@ -451,6 +481,7 @@ export const noopOfflineEngine: OfflineEngine = {
   selectRace: () => {},
   setLapFilter: () => {},
   scan: () => Promise.reject(new Error("unavailable during render")),
+  rememberNames: () => {},
   drain: () => Promise.resolve(),
   resync: () => Promise.resolve(),
 };

@@ -6,6 +6,7 @@ import { OfflineEngine } from "@/offline";
 import { AppContext } from "@/context";
 import { Summary } from "@/components/Summary";
 import { ShowRaceQR } from "@/components/RaceQR";
+import { Racers } from "@/components/Racers";
 import { Scan } from "@/components/Scan";
 import { ChooseRace } from "@/components/ChooseRace";
 import { Popups, createPopupService } from "@/components/Popup";
@@ -57,6 +58,7 @@ export const App: Component<AppProps> = (props) => {
         />
         <Route path="/summary" component={Summary} />
         <Route path="/share" component={ShowRaceQR} />
+        <Route path="/racers" component={Racers} />
         <Route path="/join/:id" component={JoinRace} />
       </Router>
     </AppContext.Provider>

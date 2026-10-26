@@ -537,3 +537,173 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     font-weight: bold;
     white-space: nowrap;
 }
+
+.racers h2 {
+    margin: 0 0 var(--spacing-md);
+    font-size: 1.1em;
+}
+
+.add-racers,
+.print-racers {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: calc(var(--spacing-md) * 2);
+    margin-bottom: calc(var(--spacing-md) * 3);
+    padding: calc(var(--spacing-md) * 3);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+}
+
+.add-racers label {
+    flex: 1 1 14rem;
+    display: flex;
+    flex-direction: column;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.add-racers textarea {
+    font: inherit;
+    font-size: 1rem;
+    resize: vertical;
+}
+
+.print-racers label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.print-racers button:disabled,
+.add-racers button:disabled,
+.racer-table .remove:disabled {
+    opacity: 0.5;
+}
+
+.racer-table td {
+    vertical-align: middle;
+}
+
+.racer-table .name {
+    width: 100%;
+    min-width: 6em;
+    font: inherit;
+}
+
+/* Long scanned text is cut short; the full value is in the title. */
+.racer-table .qr-data {
+    max-width: 10em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Only exists for printing: the app hides and the sheet shows. */
+.print-sheet {
+    display: none;
+}
+
+@media print {
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+
+    html,
+    body {
+        height: auto;
+        display: block;
+        background: #fff;
+    }
+
+    body > :not(:has(.print-sheet)) {
+        display: none !important;
+    }
+
+    .print-sheet {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4mm;
+        color: #000;
+    }
+
+    .print-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        break-inside: avoid;
+    }
+
+    .print-card p {
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .print-qr svg {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    /* ISO/IEC 7810 ID-1 (CR80) card, portrait, the size standard lanyard
+       badge holders take. Dashed edges to cut along; 9 fit on A4. */
+    .print-badge .print-card {
+        width: 54mm;
+        height: 85.6mm;
+        padding: 3mm;
+        gap: 2mm;
+        border: 0.3mm dashed #888;
+    }
+
+    .print-badge .print-race {
+        font-size: 9pt;
+        font-weight: 600;
+    }
+
+    .print-badge .print-qr {
+        width: 46mm;
+    }
+
+    .print-badge .print-name {
+        font-size: 12pt;
+        font-weight: 600;
+    }
+
+    .print-a4 .print-card {
+        width: 100%;
+        height: 270mm;
+        gap: 8mm;
+        break-after: page;
+    }
+
+    .print-a4 .print-card:last-child {
+        break-after: auto;
+    }
+
+    .print-a4 .print-race {
+        font-size: 24pt;
+        font-weight: 600;
+    }
+
+    .print-a4 .print-qr {
+        width: 170mm;
+    }
+
+    .print-a4 .print-name {
+        font-size: 32pt;
+        font-weight: 600;
+    }
+}

@@ -15,7 +15,7 @@ export function lapsCsv(laps: LapData[]): string {
     .map((lap) => [
       lap.timestamp,
       lap.runner,
-      runnerName(lap.info) ?? "",
+      runnerName(lap) ?? "",
       lap.device ?? "",
       lap.deviceLabel ?? (lap.device ? names.get(lap.device)! : ""),
       lap.userName ?? "",

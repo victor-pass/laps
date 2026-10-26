@@ -8,6 +8,7 @@ export function testLap(overrides: Partial<LapData> = {}): LapData {
     timestamp: "1970-01-01T00:00:00.000Z",
     race: uuid(1),
     info: null,
+    name: null,
     device: null,
     deviceLabel: null,
     user: null,
@@ -29,6 +30,7 @@ export function testRunner(overrides: Partial<RunnerData> = {}): RunnerData {
   return {
     ref: uuid(2),
     info: "Runner Bib 42",
+    name: null,
     ...overrides,
   };
 }

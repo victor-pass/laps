@@ -7,6 +7,7 @@ import { LapCountsView } from "./LapCountsView";
 import { MenuView } from "./MenuView";
 import { PopupView } from "./PopupView";
 import { RaceQRView } from "./RaceQRView";
+import { PrintSheetView, RacersView } from "./RacersView";
 import { viewAccessor } from "./View";
 
 export const loadViews = ({ container }: { container: HTMLElement }) => ({
@@ -19,4 +20,7 @@ export const loadViews = ({ container }: { container: HTMLElement }) => ({
   createRace: viewAccessor(container, CreateRaceView),
   menu: viewAccessor(container, MenuView),
   joinRace: viewAccessor(container, JoinRaceView),
+  racers: viewAccessor(container, RacersView),
+  // Portalled into the body, outside the rendered container.
+  printSheet: viewAccessor(document.body, PrintSheetView),
 });

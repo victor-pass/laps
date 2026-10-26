@@ -39,6 +39,7 @@ export const LapCounts: Component<Props> = (props) => {
             id: -1 - i,
             race: raceId,
             info: null,
+            name: null,
             device: null,
             deviceLabel: null,
             user: null,
@@ -51,7 +52,7 @@ export const LapCounts: Component<Props> = (props) => {
   );
 
   const names = () =>
-    new Map((laps() ?? []).map((lap) => [lap.runner, runnerName(lap.info)]));
+    new Map((laps() ?? []).map((lap) => [lap.runner, runnerName(lap)]));
 
   // Most laps first; ties by name, with unnamed runners after named ones.
   const counts = () =>
