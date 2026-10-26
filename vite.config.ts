@@ -19,6 +19,10 @@ export const viteConfig: UserConfig = {
   css: {
     modules: false,
   },
+  // `just dev-tailscale` proxies the tailnet name to the dev server.
+  server: {
+    allowedHosts: [".ts.net"],
+  },
 };
 
 export default defineConfig(viteConfig);
