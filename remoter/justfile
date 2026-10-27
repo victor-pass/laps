@@ -1,0 +1,8 @@
+# Runs the Vite dev server and exposes the port it picks on the tailnet over HTTPS
+# (phone cameras need a secure context). Unexposes it on exit.
+dev-tailscale:
+    pnpm exec vite --config ./remoter/vite.config.ts
+
+# Build and deploy to Cloudflare.
+deploy:
+    pnpm run deploy
