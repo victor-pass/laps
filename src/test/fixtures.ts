@@ -31,6 +31,7 @@ export function testRunner(overrides: Partial<RunnerData> = {}): RunnerData {
     ref: uuid(2),
     info: "Runner Bib 42",
     name: null,
+    details: {},
     ...overrides,
   };
 }

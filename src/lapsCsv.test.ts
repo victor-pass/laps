@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lapsCsv, lapsCsvFilename } from "./lapsCsv";
+import { groupCsv, lapsCsv, lapsCsvFilename, racersCsv } from "./lapsCsv";
 import { testLap, uuid } from "./test/fixtures";
 import { deviceName } from "./deviceName";
 
@@ -80,5 +80,91 @@ describe("lapsCsvFilename", () => {
 
   it("falls back when the name has no usable characters", () => {
     expect(lapsCsvFilename("🏃")).toStrictEqual("race-laps.csv");
+  });
+});
+
+describe("group reports", () => {
+  const racer = (ref: string, name: string, details: Record<string, string>) => ({
+    ref,
+    name,
+    info: null,
+    details,
+  });
+  const racers = [
+    racer("r1", "Sam", { teacher: "Lee", grade: "3" }),
+    racer("r2", "Alex", { teacher: "Ng", grade: "10" }),
+    racer("r3", "Kim", { teacher: "Lee", grade: "2" }),
+    racer("r4", "Jo", {}),
+  ];
+  const at = (runner: string, time: string) =>
+    testLap({ runner, timestamp: `2026-01-01T${time}.000Z` });
+  const laps = [
+    at("r1", "09:00:00"),
+    at("r1", "09:00:02"), // within 5s - collapsed
+    at("r1", "09:10:00"),
+    at("r2", "09:05:00"),
+    at("r4", "09:06:00"),
+    at("r3", "10:30:00"), // after the window
+  ];
+  const window = {
+    from: new Date("2026-01-01T09:00:00Z"),
+    to: new Date("2026-01-01T09:59:59Z"),
+    filterSeconds: 5,
+  };
+
+  it("totals laps per group in the window, with racers who have none", () => {
+    expect(groupCsv(racers, laps, { ...window, groupBy: "teacher" })).toStrictEqual(
+      [
+        "teacher,racers,laps,average_laps",
+        "Lee,2,2,1",
+        "Ng,1,1,1",
+        "(none),1,1,1",
+        "Total,4,4,1",
+      ].join("\r\n"),
+    );
+  });
+
+  it("lists racers with every detail, sorted by group in number order", () => {
+    expect(racersCsv(racers, laps, { filterSeconds: 5, groupBy: "grade" })).toStrictEqual(
+      [
+        "name,runner_id,grade,teacher,laps",
+        "Kim,r3,2,Lee,1",
+        "Sam,r1,3,Lee,2",
+        "Alex,r2,10,Ng,1",
+        "Jo,r4,,,1",
+      ].join("\r\n"),
+    );
+  });
+
+  it("adds distance columns in the race's unit when it has a lap distance", () => {
+    const distance = { perLap: 0.4, unit: "km" } as const;
+    expect(
+      groupCsv(racers, laps, { ...window, groupBy: "teacher", distance }),
+    ).toStrictEqual(
+      [
+        "teacher,racers,laps,average_laps,distance_km,average_distance_km",
+        "Lee,2,2,1,0.8,0.4",
+        "Ng,1,1,1,0.4,0.4",
+        "(none),1,1,1,0.4,0.4",
+        "Total,4,4,1,1.6,0.4",
+      ].join("\r\n"),
+    );
+    expect(
+      racersCsv(racers, laps, { filterSeconds: 5, groupBy: "", distance }),
+    ).toStrictEqual(
+      [
+        "name,runner_id,grade,teacher,laps,distance_km",
+        "Alex,r2,10,Ng,1,0.4",
+        "Jo,r4,,,1,0.4",
+        "Kim,r3,2,Lee,1,0.4",
+        "Sam,r1,3,Lee,2,0.8",
+      ].join("\r\n"),
+    );
+  });
+
+  it("names report files after the race and grouping", () => {
+    expect(lapsCsvFilename("Spring 5k", "by-teacher")).toStrictEqual(
+      "spring-5k-by-teacher.csv",
+    );
   });
 });

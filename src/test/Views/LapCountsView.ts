@@ -1,5 +1,4 @@
 import { View } from "./View";
-import { fireEvent } from "@solidjs/testing-library";
 
 export class LapCountsView extends View {
   static selector = ".lap-counts";
@@ -14,34 +13,22 @@ export class LapCountsView extends View {
     }));
   }
 
+  // Each row's distance cell, when the race has a lap distance.
+  distances() {
+    return this.$$("tr.runner-row").map(
+      (row) => row.querySelector(".distance")?.textContent,
+    );
+  }
+
   get headers() {
     return this.$$("th").map((th) => th.textContent);
   }
 
-  private get input() {
-    return this.$(".lap-filter input") as HTMLInputElement;
+  get total() {
+    return this.$(".lap-total")?.textContent;
   }
 
-  get filterValue() {
-    return this.input.value;
-  }
-
-  // Fires the local (instant) recompute only - matches typing in the box.
-  setFilter(value: string) {
-    fireEvent.input(this.input, { target: { value } });
-  }
-
-  // Also fires the commit (blur/Enter) that persists the value.
-  commitFilter(value: string) {
-    fireEvent.input(this.input, { target: { value } });
-    fireEvent.change(this.input, { target: { value } });
-  }
-
-  get exportButton() {
-    return this.$(".export-laps") as HTMLButtonElement;
-  }
-
-  exportCsv() {
-    fireEvent.click(this.exportButton);
+  get filterNote() {
+    return this.$(".lap-filter-note")?.textContent;
   }
 }

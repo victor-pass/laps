@@ -51,6 +51,61 @@ describe("Summary", () => {
     );
   });
 
+  it("lists recent scans and narrows everything to a tapped device", async () => {
+    const gate = { id: uuid(8), user: "Sam", label: "Gate B", lastSeen: "2026-09-02T11:30:00.000Z" };
+    const finish = { id: uuid(9), user: "Jo", label: "Finish", lastSeen: "2026-09-02T11:30:00.000Z" };
+    const lap = (runner: string, device: string, seconds: number) =>
+      testLap({
+        runner,
+        device,
+        info: { name: runner },
+        timestamp: new Date(Date.UTC(2026, 8, 2, 11, 0, seconds)).toISOString(),
+      });
+    const views = loadViews(
+      render(() => (
+        <TestContext
+          api={{
+            races: {
+              selected: { $get: mockJSONRequest(testRace({ id: uuid(1), lapFilterSeconds: 5 })) },
+              ":id": {
+                laps: {
+                  $get: mockJSONRequest([
+                    lap("Ava", gate.id, 0),
+                    // Also at the finish 2s later: one lap, not two.
+                    lap("Ava", finish.id, 2),
+                    lap("Leo", finish.id, 10),
+                  ]),
+                },
+                devices: { $get: mockJSONRequest([gate, finish]) },
+              },
+            },
+          }}
+        >
+          <Summary />
+        </TestContext>
+      )),
+    );
+
+    const recent = await views.recentScans();
+    await waitFor(() =>
+      expect(recent.items()).toStrictEqual([
+        { runner: "Leo", device: "Finish", repeat: false },
+        { runner: "Ava", device: "Finish · repeat", repeat: true },
+        { runner: "Ava", device: "Gate B", repeat: false },
+      ]),
+    );
+
+    const devices = await views.devices();
+    await waitFor(() => expect(devices.items()).toHaveLength(2));
+    devices.select("Finish");
+
+    await waitFor(() => expect(recent.items()).toHaveLength(2));
+    // Ava's lap was counted from the gate, so the finish only added Leo's.
+    expect((await views.lapCounts()).items()).toStrictEqual([
+      { name: "Leo", id: "Leo", count: 1 },
+    ]);
+  });
+
   it("switches to a race chosen elsewhere in the app", async () => {
     const spring = testRace({ id: uuid(1), name: "Spring 5k", lapFilterSeconds: 5 });
     const trail = testRace({ id: uuid(2), name: "Trail Run", lapFilterSeconds: 30 });
@@ -99,7 +154,7 @@ describe("Summary", () => {
         "trail-runner",
       ]),
     );
-    expect((await views.lapCounts()).filterValue).toStrictEqual("30");
+    expect((await views.lapCounts()).filterNote).toContain("Scans within 30s");
     await waitFor(async () =>
       expect((await views.devices()).items().map((d) => d.name)).toEqual([
         "Aid station",

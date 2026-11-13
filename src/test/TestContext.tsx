@@ -22,6 +22,7 @@ export type ApiOverrides = {
       runners?: MockedApi<
         Pick<ApiClient["races"][":id"]["runners"], "$get" | "$post">
       > & {
+        import?: MockedApi<ApiClient["races"][":id"]["runners"]["import"]>;
         ":ref"?: MockedApi<ApiClient["races"][":id"]["runners"][":ref"]>;
       };
     };
@@ -65,6 +66,11 @@ export function testApi(overrides: ApiOverrides = {}): ApiClient {
           $get: overrides.races?.[":id"]?.runners?.$get ?? mockJSONRequest([]),
           $post:
             overrides.races?.[":id"]?.runners?.$post ?? mockJSONRequest([]),
+          import: {
+            $post:
+              overrides.races?.[":id"]?.runners?.import?.$post ??
+              mockJSONRequest([]),
+          },
           ":ref": {
             $patch:
               overrides.races?.[":id"]?.runners?.[":ref"]?.$patch ??
@@ -101,6 +107,7 @@ export function offlineApi(): ApiOverrides {
         runners: {
           $get: unreachable(),
           $post: unreachable(),
+          import: { $post: unreachable() },
           ":ref": { $patch: unreachable(), $delete: unreachable() },
         },
       },

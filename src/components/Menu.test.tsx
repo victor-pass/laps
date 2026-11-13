@@ -27,7 +27,7 @@ function renderAt(path: string, scanner: QrScanner) {
             path="/scanBack"
             component={() => <Scan facing="environment" />}
           />
-          <Route path="/summary" component={() => <p class="summary" />} />
+          <Route path="/sync" component={() => <p class="sync" />} />
         </MemoryRouter>
       </TestContext>
     )),
@@ -43,28 +43,28 @@ function fakeScanner() {
 describe("Menu", () => {
   it("shows the current page on the button", async () => {
     const { scanner } = fakeScanner();
-    const views = renderAt("/summary", scanner);
+    const views = renderAt("/sync", scanner);
 
     const menu = await views.menu();
-    expect(menu.current()).toStrictEqual("☰ Summary");
+    expect(menu.current()).toStrictEqual("☰ Sync");
     menu.open();
     expect(menu.options()).toStrictEqual([
       "Front",
       "Back",
-      "Summary",
-      "Racers",
+      "Sync",
+      "Race",
       "Share",
     ]);
     expect(menu.group()).toStrictEqual({
       label: "Scan",
       options: ["Front", "Back"],
     });
-    expect(menu.active()).toStrictEqual("Summary");
+    expect(menu.active()).toStrictEqual("Sync");
   });
 
   it("opens the back camera scanner from another page and closes", async () => {
     const { scanner, start } = fakeScanner();
-    const views = renderAt("/summary", scanner);
+    const views = renderAt("/sync", scanner);
 
     const menu = await views.menu();
     menu.open();

@@ -1,4 +1,4 @@
-import { createAPI } from "@/api";
+import { createAPI, type RaceSettings } from "@/api";
 import { dbSeed, inMemoryDB } from "@/test/inMemoryDB";
 import { testClient } from "hono/testing";
 import { expect, describe, it } from "vitest";
@@ -7,6 +7,9 @@ import { sign } from "hono/jwt";
 import { uuid } from "@/test/fixtures";
 import { device } from "@/db/schema";
 import { eq } from "drizzle-orm";
+
+// A race's distance settings until they're set.
+const noDistance = { lapDistance: null, distanceUnit: "km" };
 
 const JWT_SECRET = randomBytes(32).toString("hex");
 
@@ -211,7 +214,7 @@ describe("races", () => {
     const res = await client.races.$get({}, await headers("user"));
 
     expect(await res.json()).toEqual([
-      { id: uuid(1), name: "Spring 5k", lapFilterSeconds: 5 },
+      { id: uuid(1), name: "Spring 5k", lapFilterSeconds: 5, ...noDistance },
     ]);
   });
 
@@ -251,11 +254,12 @@ describe("races", () => {
       id: uuid(5),
       name: "Spring 5k",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
 
     const res = await client.races.$get({}, await headers("user"));
     expect(await res.json()).toEqual([
-      { id: uuid(5), name: "Spring 5k", lapFilterSeconds: 5 },
+      { id: uuid(5), name: "Spring 5k", lapFilterSeconds: 5, ...noDistance },
     ]);
   });
 
@@ -280,6 +284,7 @@ describe("races", () => {
       id: uuid(1),
       name: "Spring 5k",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
   });
 
@@ -309,6 +314,7 @@ describe("races", () => {
       id: uuid(3),
       name: "Trail Run",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
 
     const selectedRes = await client.races.selected.$get(
@@ -344,6 +350,7 @@ describe("races", () => {
       id: uuid(3),
       name: "Trail Run",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
   });
 
@@ -371,12 +378,13 @@ describe("races", () => {
       id: uuid(1),
       name: "Spring 5k",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
 
     const races = await client.races.$get({}, await headers("user"));
     expect(await races.json()).toEqual(
       expect.arrayContaining([
-        { id: uuid(3), name: "Trail Run", lapFilterSeconds: 5 },
+        { id: uuid(3), name: "Trail Run", lapFilterSeconds: 5, ...noDistance },
       ]),
     );
   });
@@ -410,6 +418,7 @@ describe("races/selected (put)", () => {
       id: uuid(1),
       name: "Spring 5k",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
 
     const selectedRes = await client.races.selected.$get(
@@ -420,6 +429,7 @@ describe("races/selected (put)", () => {
       id: uuid(1),
       name: "Spring 5k",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
   });
 
@@ -454,6 +464,7 @@ describe("races/:id (patch)", () => {
       id: uuid(1),
       name: "Spring 5k",
       lapFilterSeconds: 8,
+      ...noDistance,
     });
 
     const previewRes = await client.races[":id"].$get(
@@ -461,6 +472,53 @@ describe("races/:id (patch)", () => {
       await headers("user"),
     );
     expect(await previewRes.json()).toMatchObject({ lapFilterSeconds: 8 });
+  });
+
+  it("sets and clears the lap distance, leaving other settings alone", async () => {
+    const { client, seed } = await setup();
+    await seed({
+      user: [{ sub: "user", name: "user" }],
+      race: [{ id: uuid(1), name: "Spring 5k", lapFilterSeconds: 8 }],
+    });
+    const patch = async (json: RaceSettings) =>
+      client.races[":id"].$patch(
+        { param: { id: uuid(1) }, json },
+        await headers("user"),
+      );
+
+    const set = await patch({ lapDistance: 0.4, distanceUnit: "mi" });
+    expect(await set.json()).toMatchObject({
+      lapFilterSeconds: 8,
+      lapDistance: 0.4,
+      distanceUnit: "mi",
+    });
+
+    const cleared = await patch({ lapDistance: null });
+    expect(await cleared.json()).toMatchObject({
+      lapFilterSeconds: 8,
+      lapDistance: null,
+      distanceUnit: "mi",
+    });
+  });
+
+  it.each([
+    { lapDistance: 0 },
+    { lapDistance: -1 },
+    { lapDistance: "400" },
+    { distanceUnit: "yd" },
+    {},
+  ])("rejects %j", async (json) => {
+    const { client, seed } = await setup();
+    await seed({
+      user: [{ sub: "user", name: "user" }],
+      race: [{ id: uuid(1), name: "Spring 5k" }],
+    });
+
+    const res = await client.races[":id"].$patch(
+      { param: { id: uuid(1) }, json: json as RaceSettings },
+      await headers("user"),
+    );
+    expect(res.status).toBe(400);
   });
 
   it("rejects a negative lap filter", async () => {
@@ -515,6 +573,7 @@ describe("runners.scan", () => {
       id: uuid(0),
       name: "Spring 5k",
       lapFilterSeconds: 5,
+      ...noDistance,
     });
     expect(body.lapCount).toBe(1);
     expect(body.runner.info).toEqual("bib:42");
@@ -670,8 +729,8 @@ describe("races/:id/runners", () => {
     expect(res.status).toBe(200);
     const added = await res.json();
     expect(added).toEqual([
-      { ref: expect.any(String), info: null, name: "Sam", laps: 0 },
-      { ref: expect.any(String), info: null, name: "Alex", laps: 0 },
+      { ref: expect.any(String), info: null, name: "Sam", details: {}, laps: 0 },
+      { ref: expect.any(String), info: null, name: "Alex", details: {}, laps: 0 },
     ]);
 
     const list = await client.races[":id"].runners.$get(
@@ -715,7 +774,12 @@ describe("races/:id/runners", () => {
 
     const scanned = await (await scan(client, sam.ref)).json();
 
-    expect(scanned.runner).toEqual({ ref: sam.ref, info: null, name: "Sam" });
+    expect(scanned.runner).toEqual({
+      ref: sam.ref,
+      info: null,
+      name: "Sam",
+      details: {},
+    });
     expect(scanned.lapCount).toBe(1);
   });
 
@@ -739,6 +803,99 @@ describe("races/:id/runners", () => {
     expect(await cleared.json()).toEqual(
       expect.objectContaining({ name: null }),
     );
+  });
+
+  it("edits a racer's details, keeping their name, and removes blank ones", async () => {
+    const { client, seed } = await setup();
+    await seed(joined);
+    const [sam] = await (
+      await client.races[":id"].runners.$post(
+        { param: { id: uuid(0) }, json: { names: ["Sam"] } },
+        await headers("user"),
+      )
+    ).json();
+    const patch = async (details: Record<string, string>) =>
+      client.races[":id"].runners[":ref"].$patch(
+        { param: { id: uuid(0), ref: sam.ref }, json: { details } },
+        await headers("user"),
+      );
+
+    await patch({ teacher: " Ms Lee ", grade: "3" });
+    const res = await patch({ grade: " " });
+
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ name: "Sam", details: { teacher: "Ms Lee" } }),
+    );
+    const list = await client.races[":id"].runners.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    expect((await list.json())[0].details).toEqual({ teacher: "Ms Lee" });
+  });
+
+  it("imports details, merging into existing racers and adding new ones", async () => {
+    const { client, seed } = await setup();
+    await seed(joined);
+    const [sam, alex] = await (
+      await client.races[":id"].runners.$post(
+        { param: { id: uuid(0) }, json: { names: ["Sam", "Alex"] } },
+        await headers("user"),
+      )
+    ).json();
+    await client.races[":id"].runners[":ref"].$patch(
+      {
+        param: { id: uuid(0), ref: sam.ref },
+        json: { details: { teacher: "Ms Lee", grade: "3" } },
+      },
+      await headers("user"),
+    );
+
+    const res = await client.races[":id"].runners.import.$post(
+      {
+        param: { id: uuid(0) },
+        json: {
+          updated: [
+            { ref: sam.ref, details: { grade: "4", house: "Red" } },
+            { ref: alex.ref, name: "Alexis", details: { grade: "" } },
+          ],
+          added: [{ name: " Kim ", details: { teacher: "Mr Ng" } }],
+        },
+      },
+      await headers("user"),
+    );
+
+    expect(res.status).toBe(200);
+    const byName = Object.fromEntries(
+      (await res.json()).map((r) => [r.name, r.details]),
+    );
+    expect(byName).toEqual({
+      Sam: { teacher: "Ms Lee", grade: "4", house: "Red" },
+      Alexis: {},
+      Kim: { teacher: "Mr Ng" },
+    });
+  });
+
+  it("404s importing into a racer who isn't in the race, changing nothing", async () => {
+    const { client, seed } = await setup();
+    await seed({ ...joined, runner: [{ ref: uuid(7), info: "bib:7" }] });
+
+    const res = await client.races[":id"].runners.import.$post(
+      {
+        param: { id: uuid(0) },
+        json: {
+          updated: [{ ref: uuid(7), details: { grade: "4" } }],
+          added: [{ name: "Kim", details: {} }],
+        },
+      },
+      await headers("user"),
+    );
+
+    expect(res.status).toBe(404);
+    const list = await client.races[":id"].runners.$get(
+      { param: { id: uuid(0) } },
+      await headers("user"),
+    );
+    expect(await list.json()).toEqual([]);
   });
 
   it("404s renaming a runner who isn't in the race", async () => {
@@ -796,8 +953,17 @@ describe("races/:id/runners", () => {
       await headers("stranger"),
     );
 
+    const imported = await client.races[":id"].runners.import.$post(
+      {
+        param: { id: uuid(0) },
+        json: { updated: [], added: [{ name: "Sam", details: {} }] },
+      },
+      await headers("stranger"),
+    );
+
     expect(list.status).toBe(400);
     expect(add.status).toBe(400);
+    expect(imported.status).toBe(400);
   });
 
   it("400s adding no names", async () => {

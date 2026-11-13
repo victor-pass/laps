@@ -1,7 +1,7 @@
 import { Hono, MiddlewareHandler } from "hono";
 import { hc } from "hono/client";
 import { validator } from "hono/validator";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { LoadDB, DB, setDB, db } from "@/db/db";
 import {
@@ -17,6 +17,8 @@ import { Context } from "hono";
 import { errorHandler } from "./errors";
 import { requireAuthCookie, authUser } from "./security";
 import { runnerRef } from "./runner";
+import { cleanDetails, mergeDetails } from "./racerDetails";
+import { type DistanceUnit, isDistanceUnit } from "./distance";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,7 +80,23 @@ export interface RaceData {
   id: string;
   name: string;
   lapFilterSeconds: number;
+  // Optional: races cached on a device before distances existed lack them.
+  lapDistance?: number | null;
+  distanceUnit?: DistanceUnit;
 }
+
+// The settings an organizer can change, all for every device.
+export type RaceSettings = Partial<
+  Pick<RaceData, "lapFilterSeconds" | "lapDistance" | "distanceUnit">
+>;
+
+const raceFields = {
+  id: race.id,
+  name: race.name,
+  lapFilterSeconds: race.lapFilterSeconds,
+  lapDistance: race.lapDistance,
+  distanceUnit: race.distanceUnit,
+};
 
 export type RunnerData = typeof runner.$inferSelect;
 
@@ -136,6 +154,7 @@ async function racers(
       ref: runner.ref,
       info: runner.info,
       name: runner.name,
+      details: runner.details,
       laps: count(lap.id),
     })
     .from(raceRunner)
@@ -209,11 +228,7 @@ export const createAPI = (loadDB: LoadDB) =>
     })
     .get("/races", async (c) => {
       const rows = await db(c)
-        .select({
-          id: race.id,
-          name: race.name,
-          lapFilterSeconds: race.lapFilterSeconds,
-        })
+        .select(raceFields)
         .from(userRace)
         .innerJoin(race, eq(race.id, userRace.race))
         .where(eq(userRace.user, authUser(c).sub));
@@ -241,11 +256,7 @@ export const createAPI = (loadDB: LoadDB) =>
       // onConflictDoNothing means a resent create has no `.returning()`
       // row of its own - this always reflects the race's current state.
       const [created] = await db(c)
-        .select({
-          id: race.id,
-          name: race.name,
-          lapFilterSeconds: race.lapFilterSeconds,
-        })
+        .select(raceFields)
         .from(race)
         .where(eq(race.id, id));
 
@@ -253,11 +264,7 @@ export const createAPI = (loadDB: LoadDB) =>
     })
     .get("/races/selected", async (c) => {
       const [row] = await db(c)
-        .select({
-          id: race.id,
-          name: race.name,
-          lapFilterSeconds: race.lapFilterSeconds,
-        })
+        .select(raceFields)
         .from(user)
         .innerJoin(race, eq(race.id, user.selectedRace))
         .where(eq(user.sub, authUser(c).sub));
@@ -267,11 +274,7 @@ export const createAPI = (loadDB: LoadDB) =>
     .put("/races/selected", jsonBody<{ id: string }>(), async (c) => {
       const { id } = c.req.valid("json");
       const [found] = await db(c)
-        .select({
-          id: race.id,
-          name: race.name,
-          lapFilterSeconds: race.lapFilterSeconds,
-        })
+        .select(raceFields)
         .from(userRace)
         .innerJoin(race, eq(race.id, userRace.race))
         .where(and(eq(userRace.user, authUser(c).sub), eq(userRace.race, id)));
@@ -287,11 +290,7 @@ export const createAPI = (loadDB: LoadDB) =>
     .get("/races/:id", async (c) => {
       const id = c.req.param("id");
       const [found] = await db(c)
-        .select({
-          id: race.id,
-          name: race.name,
-          lapFilterSeconds: race.lapFilterSeconds,
-        })
+        .select(raceFields)
         .from(race)
         .where(eq(race.id, id));
       if (!found) throw new HTTPException(404, { message: "Race not found" });
@@ -300,24 +299,39 @@ export const createAPI = (loadDB: LoadDB) =>
     })
     .patch(
       "/races/:id",
-      jsonBody<{ lapFilterSeconds: number }>(),
+      jsonBody<RaceSettings>(),
       async (c) => {
         const id = c.req.param("id");
-        const { lapFilterSeconds } = c.req.valid("json");
-        if (!Number.isInteger(lapFilterSeconds) || lapFilterSeconds < 0)
-          throw new HTTPException(400, {
-            message: "lapFilterSeconds must be a non-negative integer",
-          });
+        // Only the settings sent change.
+        const { lapFilterSeconds, lapDistance, distanceUnit } =
+          c.req.valid("json");
+        const invalid = (message: string) =>
+          new HTTPException(400, { message });
+        if (
+          lapFilterSeconds !== undefined &&
+          (!Number.isInteger(lapFilterSeconds) || lapFilterSeconds < 0)
+        )
+          throw invalid("lapFilterSeconds must be a non-negative integer");
+        if (
+          lapDistance !== undefined &&
+          lapDistance !== null &&
+          !(typeof lapDistance === "number" && lapDistance > 0 && isFinite(lapDistance))
+        )
+          throw invalid("lapDistance must be a positive number or null");
+        if (distanceUnit !== undefined && !isDistanceUnit(distanceUnit))
+          throw invalid("distanceUnit must be m, km or mi");
+        const set = Object.fromEntries(
+          Object.entries({ lapFilterSeconds, lapDistance, distanceUnit }).filter(
+            ([, v]) => v !== undefined,
+          ),
+        );
+        if (!Object.keys(set).length) throw invalid("Nothing to change");
 
         const [updated] = await db(c)
           .update(race)
-          .set({ lapFilterSeconds })
+          .set(set)
           .where(eq(race.id, id))
-          .returning({
-            id: race.id,
-            name: race.name,
-            lapFilterSeconds: race.lapFilterSeconds,
-          });
+          .returning(raceFields);
         if (!updated)
           throw new HTTPException(404, { message: "Race not found" });
 
@@ -327,11 +341,7 @@ export const createAPI = (loadDB: LoadDB) =>
     .post("/races/:id/join", async (c) => {
       const id = c.req.param("id");
       const [found] = await db(c)
-        .select({
-          id: race.id,
-          name: race.name,
-          lapFilterSeconds: race.lapFilterSeconds,
-        })
+        .select(raceFields)
         .from(race)
         .where(eq(race.id, id));
       if (!found) throw new HTTPException(404, { message: "Race not found" });
@@ -373,22 +383,93 @@ export const createAPI = (loadDB: LoadDB) =>
           .insert(raceRunner)
           .values(added.map(({ ref }) => ({ race: id, runner: ref })));
         return c.json<RacerData[]>(
-          added.map((r) => ({ ...r, info: null, laps: 0 })),
+          added.map((r) => ({ ...r, info: null, details: {}, laps: 0 })),
         );
       },
     )
     .patch(
       "/races/:id/runners/:ref",
-      jsonBody<{ name: string | null }>(),
+      // Either may be left out to keep it. A blank detail removes it.
+      jsonBody<{ name?: string | null; details?: Record<string, string> }>(),
       async (c) => {
         const { id, ref } = c.req.param();
         await requireJoined(c, id);
         const found = await requireRacer(c, id, ref);
-        const { name: raw } = c.req.valid("json");
+        const body = c.req.valid("json");
+        const raw = "name" in body ? body.name : found.name;
         const name = typeof raw === "string" && raw.trim() ? raw.trim() : null;
+        const details = mergeDetails(found.details, body.details);
 
-        await db(c).update(runner).set({ name }).where(eq(runner.ref, ref));
-        return c.json<RacerData>({ ...found, name });
+        await db(c)
+          .update(runner)
+          .set({ name, details })
+          .where(eq(runner.ref, ref));
+        return c.json<RacerData>({ ...found, name, details });
+      },
+    )
+    // Applies an upload the racers page has matched up (see planImport):
+    // merges details into existing racers, keeping any not in the upload,
+    // and adds the rest as new racers. Returns the race's racers.
+    .post(
+      "/races/:id/runners/import",
+      jsonBody<{
+        updated: {
+          ref: string;
+          name?: string;
+          details: Record<string, string>;
+        }[];
+        added: { name: string; details: Record<string, string> }[];
+      }>(),
+      async (c) => {
+        const id = c.req.param("id");
+        await requireJoined(c, id);
+        const body = c.req.valid("json");
+        const updated = (Array.isArray(body.updated) ? body.updated : [])
+          .filter((u) => typeof u?.ref === "string" && UUID_RE.test(u.ref))
+          .map((u) => ({
+            ref: u.ref.toLowerCase(),
+            name:
+              typeof u.name === "string" && u.name.trim()
+                ? u.name.trim()
+                : null,
+            details: cleanDetails(u.details),
+          }));
+        const added = (Array.isArray(body.added) ? body.added : [])
+          .filter((a) => typeof a?.name === "string" && a.name.trim())
+          .map((a) => ({
+            ref: crypto.randomUUID(),
+            name: a.name.trim(),
+            details: cleanDetails(a.details),
+          }));
+
+        const known = new Set(
+          updated.length
+            ? (await racers(c, id, updated.map((u) => u.ref))).map((r) => r.ref)
+            : [],
+        );
+        const missing = updated.find((u) => !known.has(u.ref));
+        if (missing)
+          throw new HTTPException(404, {
+            message: `Racer not found: ${missing.ref}`,
+          });
+
+        // One statement for every update, however many rows were uploaded.
+        if (updated.length)
+          await db(c).execute(sql`
+            UPDATE "runner" SET
+              "details" = "runner"."details" || u.details,
+              "name" = COALESCE(u.name, "runner"."name")
+            FROM jsonb_to_recordset(${JSON.stringify(updated)}::jsonb)
+              AS u(ref uuid, name text, details jsonb)
+            WHERE "runner"."ref" = u.ref`);
+        // No transaction (neon-http has none) - see POST /races/:id/runners.
+        if (added.length) {
+          await db(c).insert(runner).values(added);
+          await db(c)
+            .insert(raceRunner)
+            .values(added.map(({ ref }) => ({ race: id, runner: ref })));
+        }
+        return c.json<RacerData[]>(await racers(c, id));
       },
     )
     .delete("/races/:id/runners/:ref", async (c) => {
@@ -416,11 +497,7 @@ export const createAPI = (loadDB: LoadDB) =>
         if (isNaN(scannedAt.getTime()))
           throw new HTTPException(400, { message: "timestamp is invalid" });
         const [selected] = await db(c)
-          .select({
-            id: race.id,
-            name: race.name,
-            lapFilterSeconds: race.lapFilterSeconds,
-          })
+          .select(raceFields)
           .from(userRace)
           .innerJoin(race, eq(race.id, userRace.race))
           .where(

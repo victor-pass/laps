@@ -8,11 +8,13 @@ import { MenuView } from "./MenuView";
 import { PopupView } from "./PopupView";
 import { RaceQRView } from "./RaceQRView";
 import { PrintSheetView, RacersView } from "./RacersView";
+import { RecentScansView } from "./RecentScansView";
 import { viewAccessor } from "./View";
 
 export const loadViews = ({ container }: { container: HTMLElement }) => ({
   lapCounts: viewAccessor(container, LapCountsView),
   devices: viewAccessor(container, DevicesView),
+  recentScans: viewAccessor(container, RecentScansView),
   popup: viewAccessor(container, PopupView),
   raceQr: viewAccessor(container, RaceQRView),
   chooseRace: viewAccessor(container, ChooseRaceView),

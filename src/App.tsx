@@ -56,9 +56,9 @@ export const App: Component<AppProps> = (props) => {
           path="/scanBack"
           component={() => <Scan facing="environment" />}
         />
-        <Route path="/summary" component={Summary} />
+        <Route path="/sync" component={Summary} />
         <Route path="/share" component={ShowRaceQR} />
-        <Route path="/racers" component={Racers} />
+        <Route path="/race" component={Racers} />
         <Route path="/join/:id" component={JoinRace} />
       </Router>
     </AppContext.Provider>

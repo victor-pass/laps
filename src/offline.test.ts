@@ -66,7 +66,7 @@ describe("offline engine", () => {
       races: [race],
     });
     engine.rememberNames(race.id, [
-      { ref: uuid(11), info: null, name: "Sam" },
+      { ref: uuid(11), name: "Sam" },
     ]);
 
     const result = await engine.scan(fakeApi({}), uuid(11));
@@ -172,14 +172,68 @@ describe("offline engine", () => {
     const lapFilter = mockJSONRequest(null);
     const api = fakeApi({ lapFilter });
 
-    engine.setLapFilter(api, race, 3);
-    engine.setLapFilter(api, race, 8);
+    engine.setRaceSettings(api, race, { lapFilterSeconds: 3 });
+    engine.setRaceSettings(api, race, { lapFilterSeconds: 8 });
     await flush();
 
     expect(lapFilter).toHaveBeenCalledExactlyOnceWith({
       param: { id: race.id },
       json: { lapFilterSeconds: 8 },
     });
+  });
+
+  it("merges different setting edits into one sync and applies them locally", async () => {
+    const race = testRace();
+    const engine = createOfflineEngine({
+      ...emptyState(),
+      selectedRace: race,
+      races: [{ ...race }],
+    });
+    const lapFilter = mockJSONRequest(null);
+    const api = fakeApi({ lapFilter });
+
+    engine.setRaceSettings(api, race, { lapFilterSeconds: 8 });
+    engine.setRaceSettings(api, race, { lapDistance: 0.4, distanceUnit: "mi" });
+    await flush();
+
+    expect(lapFilter).toHaveBeenCalledExactlyOnceWith({
+      param: { id: race.id },
+      json: { lapFilterSeconds: 8, lapDistance: 0.4, distanceUnit: "mi" },
+    });
+    expect(engine.state().selectedRace).toMatchObject({
+      lapFilterSeconds: 8,
+      lapDistance: 0.4,
+      distanceUnit: "mi",
+    });
+    expect(engine.state().races[0]).toMatchObject({ lapDistance: 0.4 });
+    expect(engine.pendingCount()).toBe(0);
+  });
+
+  it("still sends a lap filter change saved by an older version", async () => {
+    const saved = JSON.stringify({
+      state: emptyState(),
+      queue: [],
+      pendingLapFilter: { race: uuid(1), seconds: 7 },
+    });
+    vi.stubGlobal("localStorage", {
+      getItem: () => saved,
+      setItem: () => {},
+    });
+    try {
+      const engine = createOfflineEngine();
+      const lapFilter = mockJSONRequest(null);
+      expect(engine.pendingCount()).toBe(1);
+
+      await engine.drain(fakeApi({ lapFilter }));
+
+      expect(lapFilter).toHaveBeenCalledExactlyOnceWith({
+        param: { id: uuid(1) },
+        json: { lapFilterSeconds: 7 },
+      });
+      expect(engine.pendingCount()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("syncs coalesced selection/lap-filter only after queued events drain", async () => {

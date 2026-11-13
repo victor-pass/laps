@@ -1,7 +1,12 @@
 # Runs the Vite dev server and exposes the port it picks on the tailnet over HTTPS
 # (phone cameras need a secure context). Unexposes it on exit.
+[group('quick')]
 dev-tailscale:
     pnpm exec vite --config ./remoter/vite.config.ts
+
+# Apply pending DB migrations to the DATABASE_URL in .env (run before deploy).
+migrate:
+    npx drizzle-kit migrate
 
 # Build and deploy to Cloudflare.
 deploy:

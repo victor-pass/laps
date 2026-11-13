@@ -383,19 +383,28 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     color: var(--e);
 }
 
-.race-settings {
-    display: flex;
-    flex-direction: column;
-    gap: calc(var(--spacing-md) * 2);
-    margin-top: calc(var(--spacing-md) * 4);
-    padding: calc(var(--spacing-md) * 3);
-    border-radius: var(--border-radius);
-    background-color: var(--card-bg);
+.sync-page h2 {
+    margin: 0 0 var(--spacing-md);
 }
 
-.race-settings h2 {
-    margin: 0;
+.sync-page h3 {
+    margin: calc(var(--spacing-md) * 4) 0 var(--spacing-md);
     font-size: 1em;
+}
+
+.sync-page h3 small {
+    font-weight: normal;
+    color: var(--text-muted);
+}
+
+.sync-page .hint {
+    margin-top: var(--spacing-md);
+}
+
+.hint {
+    margin: 0;
+    font-size: 0.8em;
+    color: var(--text-muted);
 }
 
 .lap-filter {
@@ -407,25 +416,128 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     color: var(--text-muted);
 }
 
-.export-laps:disabled {
-    opacity: 0.5;
-}
-
 .lap-filter input {
     width: 3.5em;
 }
 
-.devices {
-    margin-bottom: calc(var(--spacing-md) * 4);
+.racers .lap-filter {
+    justify-content: flex-start;
+    margin-bottom: var(--spacing-md);
 }
 
+.lap-distance {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.lap-distance input {
+    width: 5em;
+}
+
+/* This device's sync state: green when up to date, amber while waiting. */
 .this-device {
-    margin: 0 0 var(--spacing-md);
+    padding: calc(var(--spacing-md) * 2) calc(var(--spacing-md) * 3);
+    border-radius: calc(var(--border-radius) / 2);
+    background-color: #1f8a4c1a;
 }
 
-.devices-count {
-    font-weight: 600;
-    margin: 0 0 var(--spacing-md);
+.this-device.waiting {
+    background-color: #b26b001f;
+}
+
+.this-device p {
+    margin: 0;
+}
+
+.activity {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    margin-right: 0.3em;
+    border-radius: 50%;
+    background-color: var(--border-color);
+}
+
+.activity.live {
+    background-color: #1f8a4c;
+}
+
+.activity.idle {
+    background-color: #b26b00;
+}
+
+.device-name .pick {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--accent-color);
+    text-align: left;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.sheet tr.selected {
+    outline: 2px solid var(--accent-color);
+    outline-offset: -2px;
+}
+
+.device-filter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin: calc(var(--spacing-md) * 3) 0 0;
+    padding: var(--spacing-md) calc(var(--spacing-md) * 3);
+    border-radius: var(--pill-radius);
+    background-color: var(--accent-tint);
+    font-size: 0.9em;
+}
+
+.device-filter button {
+    border: none;
+    background: none;
+    font: inherit;
+    color: var(--accent-color);
+    cursor: pointer;
+}
+
+.scan-feed {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.scan-feed li {
+    display: flex;
+    gap: calc(var(--spacing-md) * 2);
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.scan-time,
+.scan-device,
+.scan-feed .empty {
+    color: var(--text-muted);
+}
+
+.scan-runner {
+    flex: 1;
+}
+
+.scan-entry.repeat .scan-runner {
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.more-scans {
+    margin-top: var(--spacing-md);
 }
 
 /* Spreadsheet-style table: header row, ruled cells, striped rows. */
@@ -543,8 +655,227 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     font-size: 1.1em;
 }
 
-.add-racers,
-.print-racers {
+.racers .racer-count {
+    font-weight: normal;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+/* One button bar, divided: add / filter, or acts on the selection, then
+   the Print and Download menus. */
+.racer-toolbar {
+    --bar-radius: calc(var(--border-radius) / 2);
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    margin-bottom: calc(var(--spacing-md) * 3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--bar-radius);
+    /* Faintly raised glass: a shine along the top, a shade below. */
+    background-color: #ffffffb3;
+    background-image: linear-gradient(#ffffff99, #ffffff00 55%, #0000000a);
+    box-shadow:
+        inset 0 1px 0 #ffffffd9,
+        inset 0 -1px 0 #0000000d,
+        0 1px 3px #0000001f;
+    backdrop-filter: blur(6px);
+}
+
+.racer-toolbar.selecting {
+    background-color: var(--accent-tint);
+}
+
+.racer-toolbar > button,
+.racer-toolbar > .selected-count,
+.racer-toolbar > .menu > summary {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    box-sizing: border-box;
+    padding: var(--spacing-md) calc(var(--spacing-md) * 2);
+    border: none;
+    border-radius: 0;
+    background: none;
+    white-space: nowrap;
+}
+
+.racer-toolbar > :not(:first-child) {
+    border-left: 1px solid var(--border-color);
+}
+
+.racer-toolbar > :first-child,
+.racer-toolbar > :first-child > summary {
+    border-radius: var(--bar-radius) 0 0 var(--bar-radius);
+}
+
+.racer-toolbar > :last-child > summary {
+    border-radius: 0 var(--bar-radius) var(--bar-radius) 0;
+}
+
+.racer-toolbar .add-racers {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.racer-toolbar .add-racers[aria-expanded="true"] {
+    background-color: var(--accent-tint);
+}
+
+.racer-toolbar .selected-count {
+    flex: 1 1 auto;
+    font-weight: bold;
+}
+
+.racer-toolbar .racer-filter {
+    flex: 1 1 5rem;
+    min-width: 0;
+    padding: var(--spacing-md) calc(var(--spacing-md) * 2);
+    border: none;
+    border-left: 1px solid var(--border-color);
+    border-radius: 0;
+    background: none;
+    font: inherit;
+    font-size: 1rem;
+}
+
+.racer-toolbar button:disabled,
+.racer-toolbar .menu button:disabled {
+    opacity: 0.5;
+}
+
+.menu summary {
+    list-style: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--pill-radius);
+    background-color: var(--card-bg);
+    cursor: pointer;
+}
+
+.menu summary::-webkit-details-marker {
+    display: none;
+}
+
+.menu[open] summary {
+    background-color: var(--accent-tint);
+}
+
+.menu-body {
+    position: absolute;
+    left: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    width: min(20rem, 100%);
+    margin-top: var(--spacing-md);
+    padding: calc(var(--spacing-md) * 2);
+    border: 1px solid var(--border-color);
+    border-radius: calc(var(--border-radius) / 2);
+    background-color: var(--card-bg);
+    box-shadow: 0 4px 16px #0003;
+}
+
+.menu-body label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.menu-body label.check {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.menu-body select,
+.menu-body input {
+    font: inherit;
+    font-size: 1rem;
+    min-width: 0;
+}
+
+.menu-scope {
+    margin: 0;
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+/* Download items: a bold title over a short description. */
+.download-menu .menu-body > button,
+.download-menu .menu-item > button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: var(--spacing-md) calc(var(--spacing-md) * 2);
+    border-radius: calc(var(--border-radius) / 3);
+    border-color: transparent;
+    background-color: transparent;
+    text-align: left;
+}
+
+.download-menu .menu-body > button:hover,
+.download-menu .menu-item > button:hover {
+    background-color: var(--accent-tint);
+}
+
+.download-menu button span {
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+/* Opens under its button, at the bar's right end. */
+.download-menu .menu-body {
+    left: auto;
+    right: 0;
+}
+
+.download-menu .menu-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.download-menu .group-by {
+    align-self: flex-start;
+    margin-left: calc(var(--spacing-md) * 2);
+}
+
+.report-window {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+/* Header buttons look like the header text, so the row stays one colour. */
+.racer-table th .sort,
+.racer-table th.add-column button {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.racer-table th.add-column button {
+    color: var(--accent-color);
+}
+
+.racer-table .new-column {
+    width: 100%;
+    min-width: 6em;
+    font: inherit;
+    text-transform: none;
+}
+
+.import-racers {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
@@ -555,7 +886,7 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     background-color: var(--card-bg);
 }
 
-.add-racers label {
+.import-racers label {
     flex: 1 1 14rem;
     display: flex;
     flex-direction: column;
@@ -563,41 +894,58 @@ main:not(:has(> .scan, > .show-race-qr))::after {
     color: var(--text-muted);
 }
 
-.add-racers textarea {
+.import-racers .import-file {
+    flex: 0 1 auto;
+}
+
+.import-racers .hint,
+.import-preview {
+    flex: 1 1 100%;
+}
+
+.import-preview p,
+.import-preview ul {
+    margin: 0 0 var(--spacing-md);
+}
+
+.import-skipped {
+    color: var(--error-color);
+    font-size: 0.85em;
+}
+
+.import-preview button + button {
+    margin-left: var(--spacing-md);
+}
+
+.import-preview button:disabled {
+    opacity: 0.5;
+}
+
+.import-racers textarea {
     font: inherit;
     font-size: 1rem;
     resize: vertical;
-}
-
-.print-racers label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    font-size: 0.85em;
-    color: var(--text-muted);
-}
-
-.print-racers button:disabled,
-.add-racers button:disabled,
-.racer-table .remove:disabled {
-    opacity: 0.5;
 }
 
 .racer-table td {
     vertical-align: middle;
 }
 
+/* Detail columns can make the racer table wider than a phone. */
+.table-scroll {
+    overflow-x: auto;
+}
+
+.racer-table .detail {
+    width: 100%;
+    min-width: 5em;
+    font: inherit;
+}
+
 .racer-table .name {
     width: 100%;
     min-width: 6em;
     font: inherit;
-}
-
-/* Long scanned text is cut short; the full value is in the title. */
-.racer-table .qr-data {
-    max-width: 10em;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .visually-hidden {

@@ -1,0 +1,1 @@
+ALTER TABLE "runner" ADD COLUMN "details" jsonb DEFAULT '{}' NOT NULL;

@@ -6,7 +6,9 @@ import {
   index,
   uniqueIndex,
   integer,
+  doublePrecision,
   json,
+  jsonb,
   text,
   primaryKey,
 } from "drizzle-orm/pg-core";
@@ -18,6 +20,13 @@ export const race = pgTable("race", {
   // client-side to collapse accidental repeat scans out of the summary and
   // the scan popup. Doesn't affect what's stored - only what's displayed.
   lapFilterSeconds: integer("lap_filter_seconds").notNull().default(5),
+  // How far one lap is, in `distanceUnit`, so counts can show distance.
+  // Null leaves distance out everywhere.
+  lapDistance: doublePrecision("lap_distance"),
+  distanceUnit: text("distance_unit")
+    .$type<"m" | "km" | "mi">()
+    .notNull()
+    .default("km"),
 });
 export const runner = pgTable("runner", {
   ref: uuid("ref").primaryKey(),
@@ -25,6 +34,13 @@ export const runner = pgTable("runner", {
   // Assigned by a race organizer on the racers page; never encoded in a
   // printed QR code, since racers may be children.
   name: text("name"),
+  // Organizer-defined fields (teacher, grade, ...) uploaded or edited on
+  // the racers page, used to group the summary export. Follows the runner
+  // into every race. Never holds an empty value - blanking one removes it.
+  details: jsonb("details")
+    .$type<Record<string, string>>()
+    .notNull()
+    .default({}),
 });
 
 // Which runners belong to a race: added on the racers page or by their

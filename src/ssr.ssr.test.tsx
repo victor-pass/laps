@@ -89,19 +89,28 @@ describe("server rendering", () => {
       },
     );
 
-    it("renders /summary with devices, lap counts and race settings", async () => {
-      const html = await renderRoute("/summary");
+    it("renders /sync with devices, lap counts and recent scans", async () => {
+      const html = await renderRoute("/sync");
       const visible = text(html);
-      expect(visible).toContain("☰ Summary");
+      expect(visible).toContain("☰ Sync");
+      expect(visible).toContain("Sync status: Spring 5k");
       expect(visible).toContain("1 device reporting");
-      expect(visible).toContain("Device User Last seen");
-      expect(visible).toContain("Finish line dev");
+      expect(visible).toContain("Device User Scans Last scan");
+      expect(visible).toContain("Finish line dev 0");
       expect(visible).toContain("Name Runner ID Laps");
       expect(visible).toContain("Jamie runner-1 1");
+      expect(visible).toContain("Scans within 5s");
+      expect(visible).toContain("Recent scans");
       // Only the browser knows which device it is.
-      expect(visible).not.toContain("This device");
-      expect(visible).toContain("Minimum seconds between counted laps");
-      expect(visible).toContain("Export laps (CSV)");
+      expect(visible).not.toContain("this device");
+    });
+
+    it("renders /race with the race and its repeat-scan setting", async () => {
+      const html = await renderRoute("/race");
+      const visible = text(html);
+      expect(visible).toContain("☰ Race");
+      expect(visible).toContain("Race: Spring 5k");
+      expect(visible).toContain("Ignore repeat scans within");
     });
 
     it("renders /share with the race QR code", async () => {

@@ -3,6 +3,7 @@ import type {
   ApiClient,
   LapData,
   RaceData,
+  RaceSettings,
   RunnerData,
   ScanResult,
 } from "@/api";
@@ -11,6 +12,8 @@ import { collapseLaps, DEFAULT_LAP_FILTER_SECONDS } from "@/lapDedupe";
 import type { RaceLink } from "@/qr";
 
 const STORAGE_KEY = "laps:offline";
+
+type NamedRunner = Pick<RunnerData, "ref" | "name">;
 
 interface LocalLap {
   runner: string;
@@ -39,11 +42,6 @@ type PendingAction =
       timestamp: string;
     };
 
-interface PendingLapFilter {
-  race: string;
-  seconds: number;
-}
-
 interface Persisted {
   state: LocalState;
   queue: PendingAction[];
@@ -52,7 +50,10 @@ interface Persisted {
   // sync, not five. Synced after `queue` drains, since either can
   // reference a race that only just got created/joined offline.
   pendingSelect?: string;
-  pendingLapFilter?: PendingLapFilter;
+  // Unsent setting changes, by race.
+  pendingSettings?: Record<string, RaceSettings>;
+  // Stored by older versions; moved into pendingSettings on load.
+  pendingLapFilter?: { race: string; seconds: number };
 }
 
 // The request couldn't be delivered yet - no network, a server error, or
@@ -74,7 +75,18 @@ export function emptyState(): LocalState {
 function load(): Persisted {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Persisted;
+    if (raw) {
+      const data = JSON.parse(raw) as Persisted;
+      const old = data.pendingLapFilter;
+      if (old) {
+        (data.pendingSettings ??= {})[old.race] = {
+          lapFilterSeconds: old.seconds,
+          ...data.pendingSettings[old.race],
+        };
+        delete data.pendingLapFilter;
+      }
+      return data;
+    }
   } catch {
     // corrupt or unavailable storage - start clean
   }
@@ -105,9 +117,9 @@ export interface OfflineEngine {
   joinRace(api: ApiClient, race: RaceData): void;
   createRace(api: ApiClient, name: string): RaceData;
   selectRace(api: ApiClient, race: RaceData): void;
-  setLapFilter(api: ApiClient, race: RaceData, seconds: number): void;
+  setRaceSettings(api: ApiClient, race: RaceData, settings: RaceSettings): void;
   scan(api: ApiClient, data: string): Promise<LocalScanResult>;
-  rememberNames(raceId: string, runners: RunnerData[]): void;
+  rememberNames(raceId: string, runners: NamedRunner[]): void;
   drain(api: ApiClient): Promise<void>;
   resync(api: ApiClient): Promise<void>;
 }
@@ -178,7 +190,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     (store.state.lapsByRace[race] ??= []).push({ runner, timestamp });
   }
 
-  function rememberNames(raceId: string, runners: RunnerData[]) {
+  function rememberNames(raceId: string, runners: NamedRunner[]) {
     (store.state.namesByRace ??= {})[raceId] = Object.fromEntries(
       runners.flatMap((r) => (r.name ? [[r.ref, r.name]] : [])),
     );
@@ -188,7 +200,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     return (
       store.queue.length > 0 ||
       store.pendingSelect !== undefined ||
-      store.pendingLapFilter !== undefined
+      pendingSettingsCount() > 0
     );
   }
 
@@ -258,27 +270,25 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     return true;
   }
 
-  async function drainLapFilter(api: ApiClient) {
-    const pending = store.pendingLapFilter;
-    if (pending === undefined) return true;
-    try {
-      await requestOk(
-        api.races[":id"].$patch({
-          param: { id: pending.race },
-          json: { lapFilterSeconds: pending.seconds },
-        }),
-      );
-    } catch (e) {
-      if (e instanceof RetryLater) return false;
-      throw e;
+  function pendingSettingsCount() {
+    return Object.keys(store.pendingSettings ?? {}).length;
+  }
+
+  async function drainSettings(api: ApiClient) {
+    for (const [race, settings] of Object.entries(store.pendingSettings ?? {})) {
+      try {
+        await requestOk(
+          api.races[":id"].$patch({ param: { id: race }, json: settings }),
+        );
+      } catch (e) {
+        if (e instanceof RetryLater) return false;
+        throw e;
+      }
+      // Only clear if nothing newer arrived while this was in flight.
+      if (store.pendingSettings?.[race] === settings)
+        delete store.pendingSettings[race];
+      persist();
     }
-    if (
-      store.pendingLapFilter?.race === pending.race &&
-      store.pendingLapFilter.seconds === pending.seconds
-    ) {
-      store.pendingLapFilter = undefined;
-    }
-    persist();
     return true;
   }
 
@@ -290,7 +300,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       // reference a race that only just got created/joined offline.
       if (!(await drainQueue(api))) return;
       if (!(await drainSelect(api))) return;
-      await drainLapFilter(api);
+      await drainSettings(api);
     } finally {
       draining = false;
     }
@@ -342,7 +352,7 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
     pendingCount: () =>
       (changed(), store.queue.length) +
       (store.pendingSelect !== undefined ? 1 : 0) +
-      (store.pendingLapFilter !== undefined ? 1 : 0),
+      pendingSettingsCount(),
 
     pendingLaps: () => (
       changed(),
@@ -380,16 +390,14 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
       void drain(api);
     },
 
-    setLapFilter(api, race, seconds) {
+    setRaceSettings(api, race, settings) {
       if (store.state.selectedRace?.id === race.id) {
-        store.state.selectedRace = {
-          ...store.state.selectedRace,
-          lapFilterSeconds: seconds,
-        };
+        store.state.selectedRace = { ...store.state.selectedRace, ...settings };
       }
       const known = store.state.races.find((r) => r.id === race.id);
-      if (known) known.lapFilterSeconds = seconds;
-      store.pendingLapFilter = { race: race.id, seconds };
+      if (known) Object.assign(known, settings);
+      const pending = (store.pendingSettings ??= {});
+      pending[race.id] = { ...pending[race.id], ...settings };
       persist();
       void drain(api);
     },
@@ -417,6 +425,8 @@ export function createOfflineEngine(seed?: LocalState): OfflineEngine {
         ref,
         info: parseInfo(data),
         name: store.state.namesByRace?.[race.id]?.[ref] ?? null,
+        // Only kept server-side.
+        details: {},
       };
       return { runner: runnerData, race, lapCount, counted: lapCount > before };
     },
@@ -479,7 +489,7 @@ export const noopOfflineEngine: OfflineEngine = {
     lapFilterSeconds: DEFAULT_LAP_FILTER_SECONDS,
   }),
   selectRace: () => {},
-  setLapFilter: () => {},
+  setRaceSettings: () => {},
   scan: () => Promise.reject(new Error("unavailable during render")),
   rememberNames: () => {},
   drain: () => Promise.resolve(),
