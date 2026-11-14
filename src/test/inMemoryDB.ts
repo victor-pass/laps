@@ -6,22 +6,30 @@ import { user, race, userRace, lap, runner, raceRunner } from "@/db/schema";
 
 let snapshot: File | Blob | undefined = undefined;
 
-export const inMemoryDB: LoadDB = async () => {
+export async function createInMemoryDatabase(): Promise<{
+  db: DB;
+  close: () => Promise<void>;
+}> {
+  let client: PGlite;
   if (snapshot) {
-    const client = new PGlite({ loadDataDir: snapshot });
-    return drizzle({ client }) as unknown as DB;
+    client = new PGlite({ loadDataDir: snapshot });
+  } else {
+    client = new PGlite();
+    const db = drizzle({ client });
+    await migrate(db, {
+      migrationsFolder: "./drizzle",
+    });
+    snapshot = await client.dumpDataDir("none");
   }
 
-  const client = new PGlite();
-  const db = drizzle({ client });
+  return {
+    db: drizzle({ client }) as unknown as DB,
+    close: () => client.close(),
+  };
+}
 
-  await migrate(db, {
-    migrationsFolder: "./drizzle",
-  });
-  snapshot = await client.dumpDataDir("none");
-
-  return db as unknown as DB;
-};
+export const inMemoryDB: LoadDB = async () =>
+  (await createInMemoryDatabase()).db;
 
 type User = typeof user.$inferInsert;
 type UserRace = typeof userRace.$inferInsert;

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1825" />
+    <title>Laps Demo Recorder</title>
+    <link rel="stylesheet" href="/shell.css" />
+  </head>
+  <body>
+    <iframe
+      id="app-frame"
+      name="laps-mobile-app"
+      title="Laps phone preview"
+      src="/race"
+    ></iframe>
+    <div id="demo-finger" class="demo-finger" aria-hidden="true">
+      <img class="demo-finger-hover" src="/finger-hover.png" alt="" />
+      <img class="demo-finger-press" src="/finger-press.png" alt="" />
+    </div>
+    <script type="module" src="/shell.ts"></script>
+  </body>
+</html>

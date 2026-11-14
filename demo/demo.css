@@ -1,0 +1,18 @@
+.scan video {
+  object-fit: cover;
+}
+
+.demo-camera-label {
+  position: fixed;
+  z-index: 2;
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  left: 1rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  color: white;
+  background: #08101dcc;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}

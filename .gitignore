@@ -7,3 +7,5 @@ dist/
 .vitest-attachments/
 __screenshots__/
 remoter/
+demo-assets/
+artifacts/demo-videos/
