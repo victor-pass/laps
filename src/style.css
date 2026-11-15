@@ -24,12 +24,20 @@
     --border-radius: 24px;
     --pill-radius: 999px;
     --toolbar-clearance: 4rem;
+    /* Edge gaps that clear notches and rounded corners (viewport-fit=cover). */
+    --edge-left: max(var(--spacing-md), env(safe-area-inset-left, 0px));
+    --edge-right: max(var(--spacing-md), env(safe-area-inset-right, 0px));
 }
 
 html,
 body {
     height: 100%;
     font-size: 0.98rem;
+}
+
+/* Android colours the bar under the page to match the page background. */
+body:has(.scan) {
+    background-color: #000;
 }
 
 body {
@@ -62,8 +70,9 @@ footer {
     flex-wrap: wrap;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-md);
-    padding-bottom: calc(var(--spacing-sm) + env(safe-area-inset-bottom, 0px));
+    padding: var(--spacing-sm) var(--edge-right)
+        calc(var(--spacing-sm) + env(safe-area-inset-bottom, 0px))
+        var(--edge-left);
 }
 
 .menu > button {
@@ -92,14 +101,14 @@ footer {
 #menu-items {
     inset: auto auto
         calc(var(--toolbar-clearance) / 2 + env(safe-area-inset-bottom, 0px))
-        var(--spacing-md);
+        var(--edge-left);
 }
 
 #race-items {
-    inset: auto var(--spacing-md)
+    inset: auto var(--edge-right)
         calc(var(--toolbar-clearance) / 2 + env(safe-area-inset-bottom, 0px))
         auto;
-    max-width: calc(100vw - 2 * var(--spacing-md));
+    max-width: calc(100vw - var(--edge-left) - var(--edge-right));
     max-height: 60vh;
     overflow-y: auto;
 }
@@ -260,8 +269,8 @@ main {
 
 main > *:not(.scan):not(.popups) {
     margin: 0;
-    padding: var(--spacing-md);
-    padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
+    padding: calc(var(--spacing-md) + env(safe-area-inset-top, 0px))
+        var(--edge-right) var(--spacing-md) var(--edge-left);
 }
 
 main:not(:has(> .scan, > .show-race-qr))::after {
@@ -286,9 +295,12 @@ main:not(:has(> .scan, > .show-race-qr))::after {
 .popups,
 .scan .confirm-race {
     position: absolute;
-    left: var(--spacing-md);
-    right: var(--spacing-md);
-    bottom: calc(var(--spacing-md) + var(--toolbar-clearance));
+    left: var(--edge-left);
+    right: var(--edge-right);
+    bottom: calc(
+        var(--spacing-md) + var(--toolbar-clearance) +
+            env(safe-area-inset-bottom, 0px)
+    );
 }
 
 .popups {
@@ -620,8 +632,8 @@ main:not(:has(> .scan, > .show-race-qr))::after {
 .sync-status {
     position: absolute;
     top: calc(var(--spacing-md) + env(safe-area-inset-top, 0px));
-    left: var(--spacing-md);
-    right: var(--spacing-md);
+    left: var(--edge-left);
+    right: var(--edge-right);
     z-index: 2;
     display: flex;
     align-items: center;

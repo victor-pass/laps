@@ -8,6 +8,7 @@ Tick `[x]` = every turn, `[1]`–`[9]` = that many turns, untick = revoke. Remot
 - [x] Allow: `rm src/components/RacersShot.test.tsx` — delete the temporary screenshot helper
 - [x] Allow: `rm src/components/SyncShot.test.tsx` — delete the temporary Sync/Race screenshot helper
 - [x] Allow: `pnpm drizzle-kit generate *` — create the racer-setup migration (offline, no DB connection)
+- [x] Allow: `pnpm demo:video *` — record the demo videos to check the demo-video refactor (local Chromium, no network) — one-off, tick [1]
 
 ## Remoter reads
 <!-- Files added to Remoter's prompt: `- [x] Read: \`TENETS.md\` — why`, paths from the project root. Same ticks as above. -->

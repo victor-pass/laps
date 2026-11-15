@@ -17,5 +17,5 @@
       "@/*": ["./src/*"],
     },
   },
-  "include": ["./src/**/*", "worker-configuration.d.ts"],
+  "include": ["./src/**/*", "./scripts/**/*", "./demo/**/*", "worker-configuration.d.ts"],
 }

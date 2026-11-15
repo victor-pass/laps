@@ -4,17 +4,22 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #0b1825;
+  /* Android paints the system bars in the manifest's theme colour. */
+  background: #000;
+  /* An installed PWA's viewport excludes the Pixel 10 status bar and gesture
+     bar (approximate heights in device pixels at 2.5x density). */
+  --status-bar: 120px;
+  --nav-bar: 60px;
 }
 
 #app-frame {
   /* Keep the app's CSS layout phone-sized, then scale it to the Pixel 10 frame. */
   position: absolute;
-  top: 0;
+  top: var(--status-bar);
   left: 0;
   display: block;
   width: calc(100vw / 2.5);
-  height: calc(100vh / 2.5);
+  height: calc((100vh - var(--status-bar) - var(--nav-bar)) / 2.5);
   border: 0;
   transform: scale(2.5);
   transform-origin: top left;

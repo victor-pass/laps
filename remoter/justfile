@@ -4,6 +4,14 @@
 dev-tailscale:
     pnpm exec vite --config ./remoter/vite.config.ts
 
+# 🎬 Generate demo video and move them to victorpass.dev website project
+[group('quick')]
+gen-videos:
+    @for workflow in setup scan data; do \
+        pnpm demo:video -- --workflow $workflow; \
+    done
+    mv artifacts/demo-videos/* ../victor-pass.github.io/public/products/
+
 # Apply pending DB migrations to the DATABASE_URL in .env (run before deploy).
 migrate:
     npx drizzle-kit migrate

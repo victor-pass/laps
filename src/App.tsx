@@ -13,6 +13,7 @@ import { Popups, createPopupService } from "@/components/Popup";
 import { Menu } from "@/components/Menu";
 import { JoinRace } from "@/components/JoinRace";
 import { SyncStatus } from "@/components/SyncStatus";
+import { ThemeColor } from "@/components/ThemeColor";
 
 interface AppProps {
   api: ApiClient;
@@ -34,6 +35,7 @@ const Layout: Component<RouteSectionProps> = (props) => (
       <ChooseRace />
     </footer>
     <SyncStatus />
+    <ThemeColor />
   </>
 );
 
